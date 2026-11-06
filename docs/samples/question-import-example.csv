@@ -1,0 +1,8 @@
+module,text,riskCategory,weight,evidenceRequired,vesselTypes,auditTypes,criticalControl
+Security,I have checked the CCTV covers the gangway and is recording.,Security,1,no,,,no
+Navigation Watch,"I have confirmed the radar is tuned for the current sea state, rain and clutter.",Marine Operations,2,yes,PSV;AHTS;Crew Boat,MFE;Spot Check,yes
+Galley,I have checked the galley gas detector was tested this week.,Health,3,yes,,,no
+Diving Operations,I have confirmed the dive team is briefed.,Personal Safety,1,no,,,no
+Security,Hi,Security,1,no,,,no
+Bunkering,I have confirmed the bunker hose is pressure tested.,Environment,7,maybe,Submarine,,no
+Security,I have checked access control to the vessel is working.,Security,1,no,,,yes
