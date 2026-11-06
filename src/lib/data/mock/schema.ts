@@ -18,7 +18,10 @@ import type {
 } from "@/lib/types";
 
 /** Bump the version suffix whenever DemoData changes shape: old saved data is then discarded and reseeded. */
-export const STORAGE_KEY = "vah-demo-v1";
+export const STORAGE_KEY = "vah-demo-v2"; // v2: the presentation data set (2026-11-06)
+
+/** Keys used by earlier versions; removed on first load so old copies do not fill up browser storage. */
+export const LEGACY_STORAGE_KEYS = ["vah-demo-v1", "vah-demo-v1-session"];
 
 export interface DemoData {
   users: User[];

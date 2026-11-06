@@ -2,7 +2,7 @@
 // On the server (no window) it runs from fixtures in memory only; data pages are client components.
 
 import { buildFixtures, type FixtureOptions } from "@/lib/data/fixtures";
-import { STORAGE_KEY, type DemoData, type TableName } from "./schema";
+import { LEGACY_STORAGE_KEYS, STORAGE_KEY, type DemoData, type TableName } from "./schema";
 
 const TABLES: TableName[] = Object.keys(buildFixtures({ history: false })).filter((k): k is TableName => k !== "counters");
 
@@ -52,6 +52,11 @@ function upgrade(value: unknown): void {
 }
 
 function load(): DemoData | null {
+  try {
+    for (const key of LEGACY_STORAGE_KEYS) storage()?.removeItem(key);
+  } catch {
+    // ignore: storage blocked
+  }
   const raw = storage()?.getItem(STORAGE_KEY);
   if (!raw) return null;
   try {

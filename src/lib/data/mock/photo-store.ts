@@ -2,6 +2,7 @@
 // Images are stored as ArrayBuffers (not Blobs) because some mobile browsers handle Blobs in IndexedDB poorly.
 // Display URLs are object URLs (blob:…), created once per photo and released when it is deleted or on reset.
 
+import { DEMO_PHOTO_SIZE, demoPhotoSvg, isDemoPhotoId } from "@/lib/data/fixtures/demo-photos";
 import type { PhotoDimensions } from "@/lib/data/repositories";
 import type { ID, PhotoMeta } from "@/lib/types";
 import { newId, nowIso } from "./utils";
@@ -42,7 +43,24 @@ async function run<T>(mode: IDBTransactionMode, operation: (store: IDBObjectStor
   });
 }
 
+/** MOCK: placeholder photos in the generated demo history are drawn from their id, never stored. */
+function demoRecord(id: ID): PhotoRecord | null {
+  const svg = demoPhotoSvg(id);
+  if (!svg) return null;
+  const bytes = new TextEncoder().encode(svg);
+  return {
+    id,
+    mimeType: "image/svg+xml",
+    size: bytes.byteLength,
+    width: DEMO_PHOTO_SIZE.width,
+    height: DEMO_PHOTO_SIZE.height,
+    createdAt: "2026-01-01T00:00:00.000Z",
+    data: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+  };
+}
+
 async function getRecord(id: ID): Promise<PhotoRecord | null> {
+  if (isDemoPhotoId(id)) return demoRecord(id);
   return ((await run("readonly", (store) => store.get(id))) as PhotoRecord | undefined) ?? null;
 }
 
@@ -96,6 +114,7 @@ export async function getPhotoUrl(id: ID): Promise<string | null> {
 
 export async function removePhoto(id: ID): Promise<void> {
   releaseUrl(id);
+  if (isDemoPhotoId(id)) return; // generated, nothing stored
   await run("readwrite", (store) => store.delete(id));
 }
 

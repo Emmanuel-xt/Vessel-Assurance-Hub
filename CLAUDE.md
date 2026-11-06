@@ -232,7 +232,7 @@ Everything marked `// MOCK` in code. Keep this list in sync.
 - [ ] `src/lib/data/mock/*`: in-memory + `localStorage` store → real database / API
 - [ ] Simulated network delay → remove
 - [ ] Mock auth (`src/lib/data/mock/auth.ts`): plain-text password check, session = user id in `localStorage`
-      (`vah-demo-v1-session`) → real auth provider, hashed passwords, httpOnly server-side sessions
+      (`vah-demo-v2-session`) → real auth provider, hashed passwords, httpOnly server-side sessions
 - [ ] Client-side route guards (`src/components/auth/guards.tsx`) → keep for UX, but enforce auth/roles on the server
       (middleware + API checks with `src/lib/services/permissions.ts`)
 - [ ] `demo.logInAs` / `demoLogInAs` (passwordless sign-in) → remove
@@ -255,7 +255,10 @@ Everything marked `// MOCK` in code. Keep this list in sync.
 - [ ] `User.password` (plain text in the mock) → never stored client-side; hashed by the auth provider
 - [ ] `src/components/admin/demo-data-panel.tsx` (demo counts + reset) → remove
 - [ ] Mock-side scoring in `assessments.submit()` → server computes scores with `src/lib/services/scoring.ts`
-- [ ] Generated demo history (`src/lib/data/fixtures/history.ts`, ~300 assessments) and the extra demo users → remove
+- [ ] Generated demo history (`src/lib/data/fixtures/history.ts`, ~300 assessments, `demo-content.ts`) and the extra
+      demo users → remove
+- [ ] Placeholder demo photos (`src/lib/data/fixtures/demo-photos.ts`; `demo-photo-…` ids drawn on request by
+      `photo-store.ts`) → remove together with the history
 - [ ] `loadDashboardData` downloads every submitted assessment, response, finding and action to the browser →
       server-side aggregation: each pure function in `src/lib/services/dashboard.ts` becomes a query (WHERE/GROUP BY)
 - [ ] All-assessments "answered No to question" filter scans every response in the browser → database query
@@ -308,7 +311,8 @@ _Confirmed decisions, with date. Assumptions are Claude's defaults where the ans
 ### Confirmed 2026-11-05 (later)
 
 - **Claude writes the real module-specific questions** (doc's first-person style), on top of the doc's 5 core questions.
-- **Vessel locations are assigned at random** (Bonga, EA, Forcados, Bonny) in the fixtures.
+- **Vessel locations are assigned at random** (Bonga, EA, Forcados, Bonny) in the fixtures, except the 8 featured
+  demo vessels, which have fixed locations (2026-11-06, see Demo data set decisions).
 - **Scaffolding conventions:**
   - Next.js **15.5.29** (pinned). Scaffolded on 16.4.5, then **stepped down to 15.5 at the owner's request**
     (2026-11-05) so Claude works on a version it knows well. Do not upgrade without asking.
@@ -588,6 +592,7 @@ Owner: "go with the best" on the plan's recommendations.
   Findings: always High for a critical No, ~60% of other Nos, ~10% of Concerns, ~3% general; 1–2 actions, closure
   likelier with age (some overdue); activity log; Good Practice → positive interventions; no photos.
   ~2 MB in localStorage (writes ~8 ms). Fleet average ≈ 85%. 10 more fictional users (19 total) across 6 companies.
+  **Superseded on 2026-11-06 by the presentation data set (see Demo data set decisions).**
   **Tests run without history** (`configureDemoFixtures({ history: false })` in `src/test/setup.ts`).
 - **`src/lib/services/dashboard.ts`:** `loadDashboardData` (supervisors/admins) → `prepareDashboardData` (indexes,
   once per load) → pure `computeDashboard(prepared, filter, now)` with `filterAssessments`, `kpis`, `trend`, `scoreBy`
@@ -651,6 +656,39 @@ Issue list approved by the owner ("Go ahead"), including the generic app mark.
   pages. `app/icon.svg` (favicon), `app/apple-icon.png`, `public/icons/icon-192.png`, `icon-512.png`,
   `maskable-512.png`, `app/manifest.ts` (standalone, navy theme `#0d2b50`). The stock Next.js `favicon.ico` was removed.
   No service worker (offline is out of scope for v1).
+
+### Demo data set decisions (2026-11-06)
+
+Owner: "Do the best for a demo" (on the plan: keep the 41-vessel register, concentrate activity on 8 vessels).
+
+- **Register kept (41 vessels); history on 8 featured vessels**, two per location (`FEATURED_VESSELS` in
+  `fixtures/vessels.ts`, fixed locations): Bonga = Dark Knight II, Normand Sentinel; EA = Lady Perpetual,
+  Surfer 2624; Forcados = Topaz Master, Armed Responder XV; Bonny = Blue Gretha, ACE Discoverer. The dashboard
+  therefore charts 8 vessels.
+- **Users: 25** (`fixtures/users.ts`): Project Marine Team (admin + 2 supervisors) and **5 contractor companies**:
+  Harbourline Offshore Services, Coastway Marine, Bluewake Vessel Management, Riverbend Marine Logistics (each crews two
+  featured vessels; workers mostly assess "their" vessels) and Deltaport Crewing (galley/deck crew fleet-wide;
+  Seacrest Catering dropped). 5 active supervisors, **3 pending** (Samuel Etim, Zainab Abubakar, Victor Akpan, who
+  requests Supervisor), 1 disabled.
+- **Story** (`STORY` in `history.ts`, locked by `history.test.ts`): weak = **Dark Knight II** (~68%, the only red
+  bar); improving = **Lady Perpetual** (~75% in May → ~95% in Oct/Nov); self vs supervisory gap = **Topaz Master**
+  (~95% self vs ~75% supervisory, the only vessel at or above the 15-point warning). Fleet ≈ 85%; ~60% of checks
+  score 75–98%, ~20% are a clean 100% (mostly Start Work Checks). A module check with no remarks usually gets one
+  Concern ("audits nearly always note something").
+- **Counts** (today = 2026-11-06): 300 assessments (~73% module, ~21% Start Work, ~5% Full Vessel), **75 findings**
+  (54 closed, 16 in progress, 5 open; 14 overdue), **8 STOPs**, 90 positive interventions, ~650 comments.
+- **Wording** in `fixtures/demo-content.ts`: per-module No / Concern / Good Practice comments, Start Work job
+  descriptions, follow-up actions, closure comments, general findings, photo subjects.
+- **Placeholder photos:** ~210 `demo-photo-<moduleId>-<n>` ids on every No/Concern answer to an evidence-required
+  question (so the history obeys the evidence rule) and on some Good Practice answers. They are **never stored**:
+  `photo-store.ts` draws a ~1 KB SVG (sky, sea, deck, object, "Demo photo · <subject>" caption) from the id on
+  request; delete is a no-op. Zero IndexedDB use; they survive every reset.
+- **Determinism:** shared seeded stream for when / where / what / who; each assessment then uses its own seeded
+  stream (`seed * 31 + index * 7919`), so tuning one rate does not reshuffle the whole set. Same data on every load and
+  reset (dates relative to today).
+- **Size:** 1,551,179 characters in localStorage (~1.5 MB; test limit 2 MB); demo photos 0 bytes stored.
+- **Storage key bumped to `vah-demo-v2`** (session `vah-demo-v2-session`) so every browser picks up the new set;
+  `vah-demo-v1` and its session are deleted on first load (`LEGACY_STORAGE_KEYS`). Everyone is signed out once.
 
 ## 16. Open questions
 
@@ -716,6 +754,10 @@ _Move answers into §15 once resolved._
       dashboard filter bar, paged All assessments, fixed dates ("Sep"), app mark + favicon + manifest (installable).
       Verified: 218 tests, `tsc`, lint, build; audit re-run shows no overflow and no sub-44 px targets.
       Still not clicked through by a person in a real phone browser.
+- [x] Demo data set (2026-11-06). 8 featured vessels with a weak / improving / gap story, 25 users (5 contractors,
+      3 pending), 300 assessments, 75 findings (14 overdue), 8 STOPs, offshore comments, generated placeholder photos,
+      storage key v2. Verified: 226 tests (story locked in `history.test.ts`), `tsc`, lint, build; checked in headless
+      Edge at 375 px (dashboard, users, assessment with photos, photo viewer). Stored size ~1.5 MB.
 
 ## 18. Source document summary
 

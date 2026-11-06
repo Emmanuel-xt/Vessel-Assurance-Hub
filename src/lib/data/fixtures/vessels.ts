@@ -69,12 +69,30 @@ const slug = (name: string) =>
 
 const random = seededRandom(20261105);
 
-export const VESSELS: Vessel[] = REGISTER.map(([name, packageId, vesselTypeId]) => ({
-  id: `ves-${slug(name)}`,
-  name,
-  vesselTypeId,
-  packageId,
-  contractor: null,
-  defaultLocationId: LOCATIONS[Math.floor(random() * LOCATIONS.length)].id,
-  status: "ACTIVE",
-}));
+/**
+ * The demo history is concentrated on these 8 vessels (two per location), so the dashboard tells a clear story.
+ * They get a fixed location; every other vessel keeps its seeded random one. The full register stays available.
+ */
+export const FEATURED_VESSELS: Record<string, string> = {
+  "Dark Knight II": "loc-bonga",
+  "Normand Sentinel": "loc-bonga",
+  "Lady Perpetual": "loc-ea",
+  "Surfer 2624": "loc-ea",
+  "Topaz Master": "loc-forcados",
+  "Armed Responder XV": "loc-forcados",
+  "Blue Gretha": "loc-bonny",
+  "ACE Discoverer": "loc-bonny",
+};
+
+export const VESSELS: Vessel[] = REGISTER.map(([name, packageId, vesselTypeId]) => {
+  const randomLocation = LOCATIONS[Math.floor(random() * LOCATIONS.length)].id; // always drawn, keeps the sequence
+  return {
+    id: `ves-${slug(name)}`,
+    name,
+    vesselTypeId,
+    packageId,
+    contractor: null,
+    defaultLocationId: FEATURED_VESSELS[name] ?? randomLocation,
+    status: "ACTIVE",
+  };
+});

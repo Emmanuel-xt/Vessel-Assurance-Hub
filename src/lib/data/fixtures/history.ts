@@ -1,10 +1,16 @@
 // MOCK: ~6 months of generated demo history (assessments, answers, findings, actions, activity, positive
-// interventions), so the dashboard tells a story from the first click. Seeded, so every reset produces the same
-// pattern; dates are relative to "today" so the demo always looks current. Production: remove (CLAUDE.md §14).
+// interventions, placeholder photos), so the dashboard tells a story from the first click. Seeded, so every reset
+// produces the same data; dates are relative to "today" so the demo always looks current.
+// Production: remove (CLAUDE.md §14).
 //
-// The story: most vessels score in the 80s–90s and improve slowly; a few vessels are weak; on a few others the crew's
-// self-assessments look fine but supervisory audits score much lower (the warning sign the dashboard highlights);
-// a handful of questions (gas testing, permits, toolbox talks, fatigue, drills…) are answered No again and again.
+// The story, on 8 featured vessels (two per location):
+// - most checks score 75–98%;
+// - Dark Knight II is clearly the weakest vessel;
+// - Lady Perpetual starts poorly and improves steadily over the six months;
+// - on Topaz Master the crew's self-assessments look fine but supervisory audits score much lower (the warning sign
+//   the dashboard highlights);
+// - a handful of questions (gas testing, permits, toolbox talks, fatigue, drills…) are answered No again and again;
+// - ~80 findings in mixed states, some overdue; a few Start Work Checks end in a STOP.
 
 import { calculateAssessmentScores } from "@/lib/services/scoring";
 import { formatActionReference, formatReference, referenceYear, sequenceKey } from "@/lib/services/references";
@@ -26,11 +32,13 @@ import type {
   Vessel,
   WorkStatus,
 } from "@/lib/types";
+import { ACTION_TEXT, CLOSURE_COMMENTS, GENERAL_FINDINGS, MODULE_CONTENT, TASKS, YES_NOTES } from "./demo-content";
+import { demoPhotoId } from "./demo-photos";
 import { AUDIT_TYPES, LOCATIONS } from "./lookups";
 import { MODULES } from "./modules";
 import { QUESTIONS } from "./questions";
 import { USERS } from "./users";
-import { VESSELS } from "./vessels";
+import { FEATURED_VESSELS, VESSELS } from "./vessels";
 
 export interface DemoHistory {
   assessments: Assessment[];
@@ -60,9 +68,19 @@ const TARGET_DAYS: Record<RiskLevel, number> = { HIGH: 7, MEDIUM: 14, LOW: 30 };
 
 // ---------- Story settings ----------
 
-const WEAK_VESSELS = ["Dark Knight II", "BL216", "Greenbarge 4", "Surfer 1903"];
-const GAP_VESSELS = ["Topaz Master", "Lady Oge", "ACE Discoverer"];
-const STRONG_VESSELS = ["Normand Sentinel", "Blue Gretha", "IGM Amethyst"];
+export const STORY = {
+  weak: "Dark Knight II",
+  improving: "Lady Perpetual",
+  gap: "Topaz Master",
+} as const;
+
+/** Which company crews which featured vessels (workers mostly assess "their" vessels). Deltaport works fleet-wide. */
+const CREWS: Record<string, string[]> = {
+  "Harbourline Offshore Services": ["Dark Knight II", "Normand Sentinel"],
+  "Coastway Marine": ["Lady Perpetual", "Surfer 2624"],
+  "Bluewake Vessel Management": ["Topaz Master", "ACE Discoverer"],
+  "Riverbend Marine Logistics": ["Armed Responder XV", "Blue Gretha"],
+};
 
 /** Answered No far more often than the rest. */
 const PROBLEM_QUESTIONS = new Set([
@@ -78,48 +96,8 @@ const PROBLEM_QUESTIONS = new Set([
   "q-working-at-height-07", // harness inspection
 ]);
 
-const NO_COMMENTS = [
-  "Not in place when checked on deck.",
-  "Records not available on board.",
-  "Certificate has expired.",
-  "Crew had not been briefed.",
-  "Equipment found defective.",
-  "Procedure not followed on this shift.",
-  "Checked with the Master: still waiting for the contractor.",
-  "Logbook entries missing for the last week.",
-];
-
-const CONCERN_COMMENTS = [
-  "In place but not everyone was aware.",
-  "Partly done; follow-up needed.",
-  "Records incomplete.",
-  "Due for renewal soon.",
-];
-
-const GOOD_PRACTICE = [
-  "Crew ran an unannounced drill and debriefed well.",
-  "Excellent toolbox talk led by the bosun.",
-  "Permit board fully up to date and clearly displayed.",
-  "Galley spotless and temperature logs complete.",
-  "Young crew member used Stop Work Authority correctly.",
-  "Master shared recent learnings at the morning meeting.",
-];
-
-const ACTION_TEXT = [
-  "Correct on board and send photo evidence.",
-  "Brief the crew and record attendance.",
-  "Replace or recertify the equipment.",
-  "Update the procedure and re-brief the team.",
-  "Raise with the contractor and confirm close-out.",
-];
-
-const TASKS: Record<string, string[]> = {
-  "mod-marine-start-work": ["Deck crane lift of containers", "Mooring operations at the buoy", "Anchor handling preparation"],
-  "mod-working-at-height": ["Replace navigation light on the mast", "Inspect antenna on the monkey island", "Paint the funnel"],
-  "mod-confined-space-entry": ["Inspect ballast tank 3 port", "Clean fuel oil day tank", "Survey void space aft"],
-  "mod-hot-work": ["Weld new bracket on the aft deck", "Cut and replace deck plating", "Repair handrail by welding"],
-  "mod-energy-isolation": ["Replace hydraulic hose on deck crane 2", "Overhaul main engine cooling pump", "Change breaker in switchboard"],
-};
+/** Base answer rates for an average check; multiplied by the vessel/audit "risk factor" below. */
+const RATES = { no: 0.0135, problemNo: 0.055, concern: 0.15, startWorkNo: 0.55 } as const;
 
 // ---------- Helpers ----------
 
@@ -139,13 +117,16 @@ const lagosDate = (ms: number) => new Date(ms + LAGOS_OFFSET).toISOString().slic
 const iso = (ms: number) => new Date(ms).toISOString();
 
 export function generateHistory(options: HistoryOptions = {}): DemoHistory {
-  const { today = new Date(), count = 300, days = 182, seed = 20261105 } = options;
+  const { today = new Date(), count = 300, days = 182, seed = 20261106 } = options;
+  // The shared stream picks when, where, what and who. Each assessment then draws its answers, comments, photos and
+  // findings from its own stream, so tuning one rate (e.g. Start Work Nos) does not reshuffle the whole data set.
   const random = seeded(seed);
-  const pick = <T>(list: readonly T[]): T => list[Math.floor(random() * list.length)];
-  const chance = (p: number) => random() < p;
-  const between = (min: number, max: number) => min + Math.floor(random() * (max - min + 1));
+  let rng = random;
+  const pick = <T>(list: readonly T[]): T => list[Math.floor(rng() * list.length)];
+  const chance = (p: number) => rng() < p;
+  const between = (min: number, max: number) => min + Math.floor(rng() * (max - min + 1));
   const weighted = <T>(entries: [T, number][]): T => {
-    let roll = random() * entries.reduce((sum, [, w]) => sum + w, 0);
+    let roll = rng() * entries.reduce((sum, [, w]) => sum + w, 0);
     for (const [value, weight] of entries) if ((roll -= weight) < 0) return value;
     return entries[entries.length - 1][0];
   };
@@ -157,11 +138,15 @@ export function generateHistory(options: HistoryOptions = {}): DemoHistory {
   const workers = active.filter((u) => u.role === "WORKER");
   const supervisors = active.filter((u) => u.role === "SUPERVISOR");
   const admins = active.filter((u) => u.role === "ADMIN");
-  const vessels = VESSELS.filter((v) => v.status === "ACTIVE");
-  const byName = (names: string[]) => new Set(VESSELS.filter((v) => names.includes(v.name)).map((v) => v.id));
-  const weak = byName(WEAK_VESSELS);
-  const gap = byName(GAP_VESSELS);
-  const strong = byName(STRONG_VESSELS);
+  const vessels = VESSELS.filter((v) => v.status === "ACTIVE" && v.name in FEATURED_VESSELS);
+  const named = (name: string) => vessels.find((v) => v.name === name)!.id;
+  const weakId = named(STORY.weak);
+  const improvingId = named(STORY.improving);
+  const gapId = named(STORY.gap);
+  const crewFor = (vessel: Vessel) => {
+    const company = Object.keys(CREWS).find((c) => CREWS[c].includes(vessel.name));
+    return workers.filter((u) => u.company === company || u.company === "Deltaport Crewing");
+  };
 
   const auditType = (code: string) => AUDIT_TYPES.find((t) => t.code === code)!;
   const selfType = auditType("SELF_ASSESSMENT");
@@ -206,30 +191,33 @@ export function generateHistory(options: HistoryOptions = {}): DemoHistory {
   };
   let ids = 0;
   const id = (prefix: string) => `hist-${prefix}-${pad(++ids, 6)}`;
+  let photos = 0;
+  const photo = (moduleId: ID) => demoPhotoId(moduleId, ++photos);
 
-  for (const submittedMs of moments) {
+  for (const [index, submittedMs] of moments.entries()) {
+    rng = random;
     const progress = 1 - (lagosMidnight - submittedMs) / (days * DAY); // 0 = oldest, 1 = now
 
-    // ---- What kind of check, by whom, where
+    // ---- Where, what kind of check, by whom
+    const vessel = weighted(
+      vessels.map((v): [Vessel, number] => [v, v.id === weakId ? 1.4 : v.id === gapId ? 1.4 : v.id === improvingId ? 1.5 : 1]),
+    );
+    const locationId = chance(0.9) ? vessel.defaultLocationId : pick(LOCATIONS).id;
     const kind: AssessmentKind = weighted([
-      ["MODULE", 62],
-      ["START_WORK", 30],
-      ["FULL_VESSEL", 8],
+      ["MODULE", 72],
+      ["START_WORK", 23],
+      ["FULL_VESSEL", 5],
     ]);
     let type: AuditType;
     if (kind === "START_WORK") type = startWorkType;
     else if (kind === "FULL_VESSEL") type = chance(0.8) ? weighted(supervisoryTypes) : selfType;
-    else type = chance(0.55) ? selfType : weighted(supervisoryTypes);
+    else type = chance(0.5) ? selfType : weighted(supervisoryTypes);
     const supervisory = type.assuranceLevel === "SUPERVISORY";
 
     let user: User;
     if (supervisory) user = chance(0.85) ? pick(supervisors) : pick(admins);
-    else if (kind === "START_WORK") user = chance(0.9) ? pick(workers) : pick(supervisors);
-    else user = chance(0.75) ? pick(workers) : pick(supervisors);
-
-    // Weak and "gap" vessels get audited more often, so their pattern is clear on the dashboard.
-    const vessel = weighted(vessels.map((v): [Vessel, number] => [v, weak.has(v.id) || gap.has(v.id) ? 3 : 1]));
-    const locationId = chance(0.85) ? vessel.defaultLocationId : pick(LOCATIONS).id;
+    else if (chance(kind === "START_WORK" ? 0.92 : 0.8)) user = pick(crewFor(vessel));
+    else user = pick(supervisors);
 
     let moduleIds: ID[];
     if (kind === "FULL_VESSEL") moduleIds = assuranceModules.map((m) => m.id);
@@ -239,36 +227,69 @@ export function generateHistory(options: HistoryOptions = {}): DemoHistory {
       moduleIds = [pick(usable).id];
     }
 
-    // ---- How likely a No is for this check
-    let pNo = 0.075;
-    if (weak.has(vessel.id)) pNo += 0.09;
-    if (supervisory) pNo += 0.04;
-    if (gap.has(vessel.id)) pNo += supervisory ? 0.14 : -0.02;
-    if (strong.has(vessel.id)) pNo *= 0.5;
-    pNo *= 1.25 - 0.5 * progress; // slow improvement over the months
+    rng = seeded(seed * 31 + (index + 1) * 7919);
+
+    // ---- Risk factor: how likely No / Concern answers are on this check
+    let risk = 1.1 - 0.25 * progress; // the fleet improves a little
+    // Supervisors look harder, except on the weak and improving vessels, whose stories are about the vessel itself.
+    if (supervisory && vessel.id !== weakId && vessel.id !== improvingId) risk *= 1.3;
+    if (vessel.id === weakId) risk *= 5.5;
+    if (vessel.id === improvingId) risk *= 5 - 4.7 * progress; // poor in May, among the best by November
+    if (vessel.id === gapId) risk *= supervisory ? 2.4 : 0.45; // crew rates itself high, supervisors do not
+    risk *= 0.7 + rng() * 0.6; // check-to-check variation
+    const startWork = kind === "START_WORK";
 
     const assessmentId = id("a");
     const createdMs = submittedMs - between(8, 45) * 60_000;
-    const answers: Response[] = [];
+
+    // Pass 1: the answers.
+    const planned: { moduleId: ID; question: Question; answer: Answer }[] = [];
     for (const moduleId of moduleIds) {
       for (const question of applicable(moduleId, vessel, type.id)) {
-        const p = Math.min(0.6, pNo + (PROBLEM_QUESTIONS.has(question.id) ? 0.12 : 0));
+        const problem = PROBLEM_QUESTIONS.has(question.id);
+        const pNo = Math.min(0.5, risk * (problem ? RATES.problemNo : RATES.no) * (startWork ? RATES.startWorkNo : 1));
+        const pConcern = startWork ? 0 : Math.min(0.5, risk * RATES.concern);
         const pNa = question.criticalControl ? 0.01 : 0.03;
-        const roll = random();
-        let answer: Answer =
-          roll < p ? "NO" : roll < p + p * 0.7 ? "CONCERN" : roll < p + p * 0.7 + pNa ? "NA" : "YES";
-        if (kind === "START_WORK" && answer === "CONCERN") answer = "YES"; // Start Work: Yes / No / N/A only
+        const roll = rng();
+        const answer: Answer = roll < pNo ? "NO" : roll < pNo + pConcern ? "CONCERN" : roll < pNo + pConcern + pNa ? "NA" : "YES";
+        planned.push({ moduleId, question, answer });
+      }
+    }
+    // Real audits nearly always note something: a module check with no remarks usually gets one Concern.
+    // (Start Work Checks stay Yes / No / N/A, so a clean one scores 100%.)
+    if (!startWork && planned.every((p) => p.answer === "YES" || p.answer === "NA") && chance(0.85)) {
+      const candidates = planned.filter((p) => p.answer === "YES" && !p.question.criticalControl);
+      if (candidates.length > 0) pick(candidates).answer = "CONCERN";
+    }
 
+    // Pass 2: comments, tags and photos.
+    const answers: Response[] = [];
+    for (const { moduleId, question, answer } of planned) {
+      {
+        const content = MODULE_CONTENT[moduleId];
         let comment = "";
         let tag: ObservationTag | null = null;
-        if (answer === "NO" && chance(0.65)) comment = pick(NO_COMMENTS);
-        if (answer === "CONCERN" && chance(0.5)) comment = pick(CONCERN_COMMENTS);
-        if (answer === "YES" && chance(0.03)) {
-          tag = "GOOD_PRACTICE";
-          comment = pick(GOOD_PRACTICE);
-        } else if ((answer === "CONCERN" || answer === "YES") && chance(0.015)) {
-          tag = "IMPROVEMENT";
+        if (answer === "NO" && chance(0.85)) comment = pick(content.no);
+        if (answer === "CONCERN" && chance(0.7)) comment = pick(content.concern);
+        if (answer === "YES") {
+          if (chance(0.036)) {
+            tag = "GOOD_PRACTICE";
+            comment = pick(content.good);
+          } else if (chance(0.04)) {
+            comment = pick(YES_NOTES);
+          }
         }
+        if ((answer === "CONCERN" || answer === "YES") && !tag && chance(0.012)) tag = "IMPROVEMENT";
+
+        // Evidence photos: the rule requires one for No / Concern on evidence-required questions; some Good Practice too.
+        const photoIds: ID[] = [];
+        if (question.evidenceRequired && (answer === "NO" || answer === "CONCERN")) {
+          photoIds.push(photo(moduleId));
+          if (chance(0.3)) photoIds.push(photo(moduleId));
+        } else if (tag === "GOOD_PRACTICE" && chance(0.35)) {
+          photoIds.push(photo(moduleId));
+        }
+
         const answeredMs = createdMs + between(1, 30) * 60_000;
         answers.push({
           id: id("r"),
@@ -278,7 +299,7 @@ export function generateHistory(options: HistoryOptions = {}): DemoHistory {
           answer,
           comment,
           observationTag: tag,
-          photoIds: [],
+          photoIds,
           questionSnapshot: { text: question.text, weight: question.weight, criticalControl: question.criticalControl },
           createdAt: iso(answeredMs),
           updatedAt: iso(answeredMs),
@@ -299,10 +320,7 @@ export function generateHistory(options: HistoryOptions = {}): DemoHistory {
       vesselId: vessel.id,
       locationId,
       auditTypeId: type.id,
-      startWork:
-        kind === "START_WORK"
-          ? { taskDescription: pick(TASKS[moduleIds[0]] ?? ["Routine deck task"]), teamSize: between(2, 8) }
-          : null,
+      startWork: startWork ? { taskDescription: pick(TASKS[moduleIds[0]] ?? ["Routine deck task"]), teamSize: between(2, 8) } : null,
       status: "SUBMITTED",
       overallScore: scores.overall,
       moduleScores: scores.byModule,
@@ -335,17 +353,17 @@ export function generateHistory(options: HistoryOptions = {}): DemoHistory {
       });
     }
 
-    // ---- Findings: always for a critical No, often for other Nos, sometimes for a Concern, rarely general
+    // ---- Findings: always (High) for a critical No, often for other Nos, rarely for a Concern or in general
     const raise: { response: Response | null; risk: RiskLevel; description: string }[] = [];
     for (const r of answers) {
       const critical = r.questionSnapshot.criticalControl;
-      if (r.answer === "NO" && (critical || chance(0.6))) {
+      if (r.answer === "NO" && (critical || chance(0.55))) {
         raise.push({
           response: r,
           risk: critical ? "HIGH" : weighted<RiskLevel>([["LOW", 35], ["MEDIUM", 45], ["HIGH", 20]]),
           description: r.comment ? `${r.questionSnapshot.text} ${r.comment}` : `Not in place: ${r.questionSnapshot.text}`,
         });
-      } else if (r.answer === "CONCERN" && chance(0.1)) {
+      } else if (r.answer === "CONCERN" && chance(0.025)) {
         raise.push({
           response: r,
           risk: weighted<RiskLevel>([["LOW", 60], ["MEDIUM", 40]]),
@@ -353,25 +371,23 @@ export function generateHistory(options: HistoryOptions = {}): DemoHistory {
         });
       }
     }
-    if (chance(0.03)) {
-      raise.push({ response: null, risk: "LOW", description: "Housekeeping on the aft deck needs attention." });
-    }
+    if (!startWork && chance(0.015)) raise.push({ response: null, risk: "LOW", description: pick(GENERAL_FINDINGS) });
 
     for (const item of raise) {
       const findingId = id("f");
       const reference = next("finding", submittedMs);
       const ageDays = Math.floor((todayMs - submittedMs) / DAY);
       const actions: Action[] = [];
-      const actionCount = chance(0.8) ? 1 : 2;
+      const actionCount = chance(0.75) ? 1 : 2;
       for (let n = 1; n <= actionCount; n++) {
-        const owner = chance(0.6) ? pick(supervisors) : pick(workers);
+        const owner = n === 1 && !supervisory && chance(0.5) ? user : chance(0.6) ? pick(supervisors) : pick(crewFor(vessel));
         const targetMs = submittedMs + TARGET_DAYS[item.risk] * DAY;
         let status: WorkStatus = "OPEN";
         let closedMs: number | null = null;
-        if (ageDays >= 3 && chance(Math.min(0.92, 0.25 + ageDays / 60))) {
+        if (ageDays >= 3 && chance(Math.min(0.88, 0.08 + ageDays / 55))) {
           status = "CLOSED";
-          closedMs = Math.min(todayMs - DAY, submittedMs + between(1, Math.max(1, Math.min(ageDays - 1, TARGET_DAYS[item.risk] + 12))) * DAY);
-        } else if (chance(0.35)) {
+          closedMs = Math.min(todayMs - DAY, submittedMs + between(1, Math.max(1, Math.min(ageDays - 1, TARGET_DAYS[item.risk] + 10))) * DAY);
+        } else if (chance(0.4)) {
           status = "IN_PROGRESS";
         }
         actions.push({
@@ -382,7 +398,7 @@ export function generateHistory(options: HistoryOptions = {}): DemoHistory {
           ownerId: owner.id,
           targetDate: lagosDate(targetMs),
           status,
-          closureComment: status === "CLOSED" ? "Completed and verified on board." : null,
+          closureComment: status === "CLOSED" ? pick(CLOSURE_COMMENTS) : null,
           closureEvidencePhotoId: null,
           createdById: user.id,
           createdAt: iso(submittedMs),

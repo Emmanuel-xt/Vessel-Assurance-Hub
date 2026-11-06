@@ -371,7 +371,7 @@ describe("computeDashboard on the demo history", () => {
     expect(view.kpis.fleetScore).toBeGreaterThan(70);
     expect(view.bucket).toBe("month");
     expect(view.trend.length).toBe(11);
-    expect(view.byVessel.length).toBeGreaterThan(30);
+    expect(view.byVessel).toHaveLength(8); // the demo history uses the 8 featured vessels
     expect(view.selfVsSupervisory.some((r) => r.warning)).toBe(true);
     expect(view.topNonCompliant).toHaveLength(10);
   });

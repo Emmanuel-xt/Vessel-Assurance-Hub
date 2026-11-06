@@ -55,9 +55,9 @@ describe("seeding", () => {
 
     expect(await repo.vessels.list()).toHaveLength(41);
     expect(await repo.modules.list()).toHaveLength(17);
-    expect(await repo.users.list()).toHaveLength(19);
+    expect(await repo.users.list()).toHaveLength(25);
     expect(await repo.users.list({ status: "DISABLED" })).toHaveLength(1);
-    expect(await repo.users.list({ status: "PENDING" })).toHaveLength(1);
+    expect(await repo.users.list({ status: "PENDING" })).toHaveLength(3);
     expect(await repo.locations.list()).toHaveLength(4);
     expect(localStorage.getItem(STORAGE_KEY)).not.toBeNull();
   });
@@ -395,6 +395,18 @@ describe("photos", () => {
     const meta = await repo.photos.upload(new Blob(["x"], { type: "image/jpeg" }));
     expect(meta).toMatchObject({ width: null, height: null });
   });
+
+  it("serves the demo history's placeholder photos without storing them", async () => {
+    const id = "demo-photo-mod-bunkering-007";
+    const meta = await repo.photos.getMeta(id);
+    expect(meta).toMatchObject({ id, mimeType: "image/svg+xml", width: 320, height: 240 });
+    expect(meta!.size).toBeLessThan(2_000);
+    expect(await (await getPhotoBlob(id))!.text()).toContain("Demo photo · ");
+    expect(await repo.photos.getUrl(id)).toMatch(/^blob:/);
+    await repo.photos.delete(id); // nothing stored, so nothing to delete
+    expect(await repo.photos.getMeta(id)).not.toBeNull();
+    expect(await repo.photos.getMeta("demo-photo-not-a-real-one")).toBeNull();
+  });
 });
 
 describe("simulated latency", () => {
@@ -405,5 +417,17 @@ describe("simulated latency", () => {
     const elapsed = performance.now() - start;
     expect(elapsed).toBeGreaterThanOrEqual(195);
     expect(elapsed).toBeLessThan(600);
+  });
+});
+
+describe("storage versions", () => {
+  it("removes data saved under an older key when it loads", async () => {
+    localStorage.setItem("vah-demo-v1", "{}");
+    localStorage.setItem("vah-demo-v1-session", "{}");
+    forgetMemoryState();
+    await repo.vessels.list();
+    expect(localStorage.getItem("vah-demo-v1")).toBeNull();
+    expect(localStorage.getItem("vah-demo-v1-session")).toBeNull();
+    expect(localStorage.getItem(STORAGE_KEY)).not.toBeNull();
   });
 });
