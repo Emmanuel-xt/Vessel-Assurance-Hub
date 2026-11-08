@@ -2,7 +2,10 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { AlertTriangle, RotateCw } from "lucide-react";
 import { toast } from "sonner";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import { useRepoQuery } from "@/lib/data/hooks";
 import type { FormSection } from "@/lib/services/assessments";
 import {
@@ -92,5 +95,29 @@ export function useFindingDrafts(
     />
   );
 
-  return { drafts, byQuestion, general, ownerName, open, sheet, loading: draftsQuery.isPending };
+  // Without the prepared findings (or the owner list) the screen would wrongly show "no findings": say so instead.
+  const failed = draftsQuery.isError || ownersQuery.isError;
+  const retrying = draftsQuery.isFetching || ownersQuery.isFetching;
+  const errorBanner = failed ? (
+    <Alert variant="destructive" className="my-4">
+      <AlertTriangle />
+      <AlertTitle>Couldn&apos;t load the findings for this assessment</AlertTitle>
+      <AlertDescription className="space-y-2">
+        <p>{(draftsQuery.error ?? ownersQuery.error)?.message}</p>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={retrying}
+          onClick={() => {
+            if (draftsQuery.isError) void draftsQuery.refetch();
+            if (ownersQuery.isError) void ownersQuery.refetch();
+          }}
+        >
+          <RotateCw className={retrying ? "animate-spin" : undefined} /> {retrying ? "Retrying…" : "Try again"}
+        </Button>
+      </AlertDescription>
+    </Alert>
+  ) : null;
+
+  return { drafts, byQuestion, general, ownerName, open, sheet, loading: draftsQuery.isPending, failed, errorBanner };
 }

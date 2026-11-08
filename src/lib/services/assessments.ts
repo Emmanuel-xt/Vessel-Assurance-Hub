@@ -10,6 +10,7 @@ import {
   modules,
   photos,
   positiveInterventions,
+  questions,
   RepositoryError,
   type PhotoDimensions,
   responses,
@@ -304,13 +305,35 @@ async function validatePhotoIds(photoIds: ID[], alreadyAttached: ID[]): Promise<
   }
 }
 
+export const COMMENT_MAX_LENGTH = 1000;
+
+const answerInputSchema = z.object({
+  assessmentId: z.string().min(1),
+  questionId: z.string().min(1),
+  answer: z.enum(["YES", "CONCERN", "NO", "NA"], { error: "Choose an answer" }),
+  comment: z
+    .string()
+    .trim()
+    .max(COMMENT_MAX_LENGTH, { error: `Keep the comment under ${COMMENT_MAX_LENGTH} characters` }),
+  observationTag: z.enum(["GOOD_PRACTICE", "IMPROVEMENT"]).nullable(),
+  photoIds: z.array(z.string().min(1)).optional(),
+});
+
 /** Saves (creates or replaces) one answer in the actor's draft. */
-export async function saveAnswer(actor: Principal, input: AnswerInput): Promise<Response> {
+export async function saveAnswer(actor: Principal, rawInput: AnswerInput): Promise<Response> {
+  const input = parseOrThrow(answerInputSchema, rawInput);
   const assessment = await requireEditableDraft(actor, input.assessmentId);
   if (!answerOptionsFor(assessment.kind).includes(input.answer)) {
     throw new ValidationError("A Start Work Check is answered Yes, No or N/A.");
   }
-  const existing = (await responses.listByAssessment(input.assessmentId)).find((r) => r.questionId === input.questionId);
+  const [question, saved] = await Promise.all([
+    questions.get(input.questionId),
+    responses.listByAssessment(input.assessmentId),
+  ]);
+  if (!question || !question.active || !assessment.moduleIds.includes(question.moduleId)) {
+    throw new ValidationError("This question is no longer part of the assessment. Reload the page.");
+  }
+  const existing = saved.find((r) => r.questionId === input.questionId);
   const attached = existing?.photoIds ?? [];
   const photoIds = input.photoIds ?? attached;
   if (input.photoIds) await validatePhotoIds(photoIds, attached);
@@ -318,7 +341,7 @@ export async function saveAnswer(actor: Principal, input: AnswerInput): Promise<
     assessmentId: input.assessmentId,
     questionId: input.questionId,
     answer: input.answer,
-    comment: input.comment.trim(),
+    comment: input.comment,
     observationTag: input.observationTag,
     photoIds: [...photoIds],
   });
@@ -347,6 +370,7 @@ export async function uploadAnswerPhoto(
  */
 export async function deleteAnswerPhoto(actor: Principal, assessmentId: ID, photoId: ID): Promise<void> {
   await requireEditableDraft(actor, assessmentId);
+  // MOCK: scans every response. Production: server-side ownership/reference check on the uploaded object.
   const all = await responses.list();
   if (all.some((r) => r.photoIds.includes(photoId))) {
     throw new RepositoryError("CONFLICT", "This photo is still attached to an answer.");
@@ -429,6 +453,8 @@ export async function submitAssessment(actor: Principal, id: ID): Promise<Assess
   const drafts = await findingDrafts.listByAssessment(id);
   await checkFindingsBeforeSubmit(sections, answers, drafts);
 
+  // MOCK: submit, positive interventions and findings are separate calls. Production: one server transaction, so a
+  // failure part-way never leaves a submitted assessment with only some of its findings.
   const scores = scoreAnswers(sections, answers);
   const submitted = await assessments.submit(id, { overallScore: scores.overall, moduleScores: scores.byModule });
 

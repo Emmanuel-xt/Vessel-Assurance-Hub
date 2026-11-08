@@ -71,7 +71,7 @@ export function UserMenu() {
         {canAccessAdmin(user) && (
           <>
             <DropdownMenuSeparator />
-            <DropdownMenuItem render={<Link href="/admin" />}>
+            <DropdownMenuItem render={<Link href="/admin/users" />}>
               <Shield /> Admin
             </DropdownMenuItem>
           </>

@@ -246,14 +246,20 @@ Everything marked `// MOCK` in code. Keep this list in sync.
 - [ ] Photos taken but never attached (user left without answering) stay in IndexedDB → server-side cleanup of
       unattached uploads
 - [ ] `deleteAnswerPhoto` scans every response to check a photo is unused → server-side ownership/reference check
-- [ ] In-app mock notifications → real notifications (email / push)
+- [ ] In-app mock notifications (`notify` in `src/lib/services/findings.ts`) → real notifications (email / push),
+      keeping the in-app record
 - [ ] Client-side permission checks → also enforce on the server (admin services in `src/lib/services/admin/` and
       `questions.ts` run in the browser today; move them behind API routes and re-validate CSV imports server-side)
 - [ ] Client-side reference number generation → server-side sequence (avoids duplicates under concurrency)
 - [ ] Open signup link → invite / tokenised signup link
 - [ ] Drafts in `localStorage` → server-side drafts (and real offline sync if required)
 - [ ] `User.password` (plain text in the mock) → never stored client-side; hashed by the auth provider
-- [ ] `src/components/admin/demo-data-panel.tsx` (demo counts + reset) → remove
+- [ ] `src/components/admin/demo-data-panel.tsx` (demo counts + reset) and `src/lib/services/admin/demo.ts`
+      (`loadDemoSummary`, `resetDemoDataAs`, admin-only) → remove
+- [ ] `DEMO_MODE` / `NEXT_PUBLIC_DEMO_MODE` (`src/lib/config.ts`, `.env.example`) → remove, or leave unset in production
+- [ ] **Services receive `actor` from the page** (the signed-in user held in the browser; see the header of
+      `src/lib/services/permissions.ts`) → on the server, take the actor from the session, never from the request body,
+      and re-read role/status on every call (today a role change only takes effect after the user reloads)
 - [ ] Mock-side scoring in `assessments.submit()` → server computes scores with `src/lib/services/scoring.ts`
 - [ ] Generated demo history (`src/lib/data/fixtures/history.ts`, ~300 assessments, `demo-content.ts`) and the extra
       demo users → remove
@@ -690,6 +696,30 @@ Owner: "Do the best for a demo" (on the plan: keep the 41-vessel register, conce
 - **Storage key bumped to `vah-demo-v2`** (session `vah-demo-v2-session`) so every browser picks up the new set;
   `vah-demo-v1` and its session are deleted on first load (`LEGACY_STORAGE_KEYS`). Everyone is signed out once.
 
+### Pre-demo review decisions (2026-11-06)
+
+- **Every `// MOCK` spot is in §14**, including production-replacement notes on real code (dashboard full download,
+  "answered No" scan, photo reference scan, non-transactional submit, browser Excel export, browser-side services).
+- **Reset demo data and the demo counts go through `src/lib/services/admin/demo.ts`** (`requireAdmin`), not straight
+  to the repository. `useResetDemoData(actor)` takes the actor.
+- **Admin sidebar pending count** uses `listUsersForAdmin` (no full user records in admin components).
+- **`saveAnswer` validates its input with Zod** (answer and tag enums, comment ≤ `COMMENT_MAX_LENGTH` = 1000, also
+  `maxLength` on the textarea) and refuses inactive questions or questions outside the assessment's modules.
+  Applicability (vessel type / audit type) is still enforced at scoring and submit, not on every autosave.
+- `changeUserRole` rejects unknown roles at runtime.
+- **`safeNextPath`** moved to `src/lib/navigation.ts` (tested); rejects `//`, backslashes and control characters.
+- **Redirects** `/admin` → `/admin/users`, `/admin/dashboard` → `/dashboard`, `/my/assessments` → `/assessments` live in
+  `next.config.ts` (HTTP 307), not in pages; in-page `redirect()` under the sticky top bar logged a Next.js warning.
+- **Error states:** findings that fail to load on the form/review show a retry banner (Submit disabled meanwhile);
+  "Findings raised" on the confirmation page shows an error with retry; the setup question count handles errors;
+  the hub shows an empty state when no module is active.
+- The dashboard performance test takes the **best of 5 runs** per filter (a single run also measured scheduler noise
+  while 22 test files run in parallel).
+- Pages, components and services import data only from `@/lib/data` (no direct `@/lib/data/repositories` imports).
+- **Raised findings and actions: any role may update and close them** (owner re-confirmed 2026-11-07, keeping the
+  2026-11-05 rule over the review brief's "owner only, admins excepted"). Who closed what, and when, is always
+  recorded. Finding *drafts* stay editable only by the assessment's author while the assessment is a draft.
+
 ## 16. Open questions
 
 _Move answers into §15 once resolved._
@@ -758,6 +788,9 @@ _Move answers into §15 once resolved._
       3 pending), 300 assessments, 75 findings (14 overdue), 8 STOPs, offshore comments, generated placeholder photos,
       storage key v2. Verified: 226 tests (story locked in `history.test.ts`), `tsc`, lint, build; checked in headless
       Edge at 375 px (dashboard, users, assessment with photos, photo viewer). Stored size ~1.5 MB.
+- [x] Pre-demo review (2026-11-06). Permissions, data-layer boundary, MOCK markers / §14, loading-empty-error states,
+      console sweep of 45 page loads in headless Edge (Admin / Worker / Supervisor / signed out). Fixed 13 findings
+      (see Pre-demo review decisions).
 
 ## 18. Source document summary
 

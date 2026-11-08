@@ -1,6 +1,7 @@
 // Admin user management: approve, reject, disable / re-enable, change role.
 
 import { users, type UserFilter } from "@/lib/data";
+import { ValidationError } from "@/lib/services/errors";
 import { PermissionError, canChangeUserRole, canChangeUserStatus, type Principal } from "@/lib/services/permissions";
 import type { ID, PublicUser, Role, User, UserStatus } from "@/lib/types";
 import { assertAllowed, orNotFound, requireAdmin } from "./shared";
@@ -52,8 +53,11 @@ export const disableUser = (actor: Principal, userId: ID) => changeStatus(actor,
 /** DISABLED → ACTIVE */
 export const reEnableUser = (actor: Principal, userId: ID) => changeStatus(actor, userId, "ACTIVE", "DISABLED");
 
+const ROLES: readonly Role[] = ["WORKER", "SUPERVISOR", "ADMIN"];
+
 export async function changeUserRole(actor: Principal, userId: ID, role: Role): Promise<PublicUser> {
   requireAdmin(actor);
+  if (!ROLES.includes(role)) throw new ValidationError("Choose a valid role.", { role: "Choose a valid role" });
   const target = orNotFound(await users.get(userId), "User", userId);
   assertAllowed(canChangeUserRole(actor, target, role, await activeAdminCount()));
   return toPublic(await users.update(userId, { role }));

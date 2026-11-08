@@ -13,7 +13,9 @@ import {
   rejectUser,
 } from "@/lib/services/admin/users";
 import { saveVessel, setVesselStatus, type VesselFormValues } from "@/lib/services/admin/vessels";
+import { loadDemoSummary, resetDemoDataAs } from "@/lib/services/admin/demo";
 import type { Principal } from "@/lib/services/permissions";
+import type { Role } from "@/lib/types";
 
 const admin: Principal = { id: "usr-admin", role: "ADMIN", status: "ACTIVE" };
 const supervisor: Principal = { id: "usr-sup-tunde", role: "SUPERVISOR", status: "ACTIVE" };
@@ -80,6 +82,25 @@ describe("users", () => {
 
   it("changes roles", async () => {
     expect(await changeUserRole(admin, "usr-wkr-blessing", "SUPERVISOR")).toMatchObject({ role: "SUPERVISOR" });
+  });
+
+  it("rejects an unknown role", async () => {
+    await expect(changeUserRole(admin, "usr-wkr-blessing", "OWNER" as Role)).rejects.toMatchObject(invalid("role"));
+  });
+});
+
+describe("demo data (MOCK)", () => {
+  it("only admins can see the counts or reset", async () => {
+    await expect(loadDemoSummary(supervisor)).rejects.toMatchObject(forbidden);
+    await expect(resetDemoDataAs(supervisor)).rejects.toMatchObject(forbidden);
+    await expect(resetDemoDataAs({ id: "usr-wkr-ibrahim", role: "WORKER", status: "ACTIVE" })).rejects.toMatchObject(forbidden);
+  });
+
+  it("resets for an admin", async () => {
+    await createLocation(admin, { name: "Escravos" });
+    await resetDemoDataAs(admin);
+    expect((await repo.locations.list()).some((l) => l.name === "Escravos")).toBe(false);
+    expect(await loadDemoSummary(admin)).toContainEqual({ label: "Vessels", value: 41 });
   });
 });
 

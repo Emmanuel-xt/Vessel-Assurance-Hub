@@ -270,7 +270,10 @@ export async function raiseDraftFindings(
   return raised;
 }
 
-/** High risk → every active admin; the action owner is told about the action. Nobody is notified of their own entry. */
+/**
+ * High risk → every active admin; the action owner is told about the action. Nobody is notified of their own entry.
+ * MOCK: in-app notifications only, and `/findings/<id>` is not built yet. Production: also send email / push.
+ */
 async function notify(raiser: Principal, assessment: Assessment, finding: Finding, action: Action, admins: { id: ID }[]) {
   const link = `/findings/${finding.id}`;
   const vessel = assessment.snapshot.vesselName;

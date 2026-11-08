@@ -366,7 +366,9 @@ function SetupForm({ kind, param, setup }: { kind: AssessmentKind; param: string
         <ListChecks className="size-4 text-teal" aria-hidden />
         {!vessel || !values.auditTypeId
           ? "Choose a vessel and audit type to see how many questions apply."
-          : counts.isPending
+          : counts.isError
+            ? "Couldn't count the questions. You can still begin."
+            : counts.isPending
             ? "Counting questions…"
             : totalQuestions === 0
               ? "No questions apply to this vessel and audit type."

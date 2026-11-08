@@ -3,6 +3,7 @@ import { mockRepositories as repo } from "@/lib/data/mock";
 import { forgetMemoryState } from "@/lib/data/mock/store";
 import { setMockDelay } from "@/lib/data/mock/utils";
 import {
+  COMMENT_MAX_LENGTH,
   clearAnswer,
   deleteAnswerPhoto,
   loadAssessmentForm,
@@ -15,7 +16,7 @@ import {
   uploadAnswerPhoto,
 } from "@/lib/services/assessments";
 import type { Principal } from "@/lib/services/permissions";
-import type { Answer, Assessment } from "@/lib/types";
+import type { Answer, Assessment, ObservationTag } from "@/lib/types";
 
 const owner: Principal = { id: "usr-wkr-blessing", role: "WORKER", status: "ACTIVE" };
 const other: Principal = { id: "usr-wkr-emeka", role: "WORKER", status: "ACTIVE" };
@@ -112,6 +113,21 @@ describe("saving answers", () => {
     const input = { assessmentId: draft.id, questionId: "q-security-01", answer: "YES" as const, comment: "", observationTag: null };
     await expect(saveAnswer(other, input)).rejects.toMatchObject({ code: "NOT_FOUND" });
     await expect(saveAnswer(admin, input)).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("validates the input in the service, not just the form", async () => {
+    const draft = await securityDraft();
+    const input = { assessmentId: draft.id, questionId: "q-security-01", answer: "YES" as const, comment: "", observationTag: null };
+    const invalid = { name: "ValidationError" };
+    await expect(saveAnswer(owner, { ...input, comment: "x".repeat(COMMENT_MAX_LENGTH + 1) })).rejects.toMatchObject(invalid);
+    await expect(saveAnswer(owner, { ...input, answer: "MAYBE" as Answer })).rejects.toMatchObject(invalid);
+    await expect(saveAnswer(owner, { ...input, observationTag: "BRILLIANT" as ObservationTag })).rejects.toMatchObject(invalid);
+    // A question from another module, a missing one, and a deactivated one.
+    await expect(saveAnswer(owner, { ...input, questionId: "q-galley-01" })).rejects.toMatchObject(invalid);
+    await expect(saveAnswer(owner, { ...input, questionId: "q-nope" })).rejects.toMatchObject(invalid);
+    await repo.questions.update("q-security-02", { active: false });
+    await expect(saveAnswer(owner, { ...input, questionId: "q-security-02" })).rejects.toMatchObject(invalid);
+    expect(await repo.responses.listByAssessment(draft.id)).toHaveLength(0);
   });
 });
 

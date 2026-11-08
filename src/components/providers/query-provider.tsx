@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { RepositoryError } from "@/lib/data/repositories";
+import { RepositoryError } from "@/lib/data";
 
 export function QueryProvider({ children }: Readonly<{ children: React.ReactNode }>) {
   const [queryClient] = useState(

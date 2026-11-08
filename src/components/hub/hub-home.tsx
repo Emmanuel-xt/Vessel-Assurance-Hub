@@ -10,7 +10,8 @@ import { Badge } from "@/components/ui/badge";
 import { questions } from "@/lib/data";
 import { useRepoQuery } from "@/lib/data/hooks";
 import { listMyOpenActions, modulesFor } from "@/lib/services/assessments";
-import { canViewDashboard } from "@/lib/services/permissions";
+import { EmptyState } from "@/components/admin/page-header";
+import { canAccessAdmin, canViewDashboard } from "@/lib/services/permissions";
 import { cn } from "@/lib/utils";
 
 async function loadTiles() {
@@ -38,7 +39,14 @@ export function HubHome() {
       <HubWelcome />
 
       <QueryState query={tiles} skeletonRows={4}>
-        {({ modules, startWorkCount }) => (
+        {({ modules, startWorkCount }) =>
+          modules.length === 0 && startWorkCount === 0 ? (
+            <EmptyState icon={Ship} title="No modules are available yet">
+              {canAccessAdmin(user)
+                ? "Activate at least one module in Admin → Modules to start assessing."
+                : "An administrator needs to set up the assessment modules. Please check back later."}
+            </EmptyState>
+          ) : (
           <>
             <section aria-label="Start an assessment" className="grid gap-3 sm:grid-cols-2">
               {startWorkCount > 0 && (
@@ -77,6 +85,7 @@ export function HubHome() {
               )}
             </section>
 
+            {modules.length > 0 && (
             <section aria-labelledby="modules-heading" className="space-y-3">
               <h2 id="modules-heading" className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
                 Assess one module
@@ -98,8 +107,10 @@ export function HubHome() {
                 ))}
               </ul>
             </section>
+            )}
           </>
-        )}
+          )
+        }
       </QueryState>
 
       <nav aria-label="Your work" className="grid gap-2 sm:grid-cols-3">

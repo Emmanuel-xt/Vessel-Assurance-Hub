@@ -7,6 +7,7 @@ import { Suspense, useEffect } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { LogoMark } from "@/components/brand/logo";
 import { NoAccessState } from "@/components/status-screen";
+import { safeNextPath } from "@/lib/navigation";
 import { hasRole } from "@/lib/services/permissions";
 import type { Role } from "@/lib/types";
 import { useAuth } from "./auth-provider";
@@ -20,10 +21,7 @@ function FullScreenLoader() {
   );
 }
 
-/** Only a same-site path is accepted as a post-login destination (no "//evil.example"). */
-export function safeNextPath(next: string | null): string {
-  return next && next.startsWith("/") && !next.startsWith("//") ? next : "/";
-}
+export { safeNextPath };
 
 /** Renders children only for a signed-in user; otherwise sends them to /login?next=<current page>. */
 export function RequireAuth({ children }: Readonly<{ children: React.ReactNode }>) {

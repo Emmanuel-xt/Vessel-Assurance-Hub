@@ -16,8 +16,9 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { users } from "@/lib/data";
+import { useCurrentUser } from "@/components/auth/auth-provider";
 import { useRepoQuery } from "@/lib/data/hooks";
+import { listUsersForAdmin } from "@/lib/services/admin/users";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -31,7 +32,10 @@ const NAV = [
 ] as const;
 
 function usePendingCount(): number {
-  const pending = useRepoQuery(["users", { status: "PENDING" }], () => users.list({ status: "PENDING" }));
+  const actor = useCurrentUser();
+  const pending = useRepoQuery(["users", "admin", { status: "PENDING" }], () =>
+    listUsersForAdmin(actor, { status: "PENDING" }),
+  );
   return pending.data?.length ?? 0;
 }
 

@@ -178,6 +178,8 @@ export function AssessmentForm({ form }: { form: FormData }) {
         </div>
       </header>
 
+      {findings.errorBanner}
+
       <div className="mt-4 space-y-3">
         {grouped
           ? sections.map((section) => (

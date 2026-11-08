@@ -12,7 +12,8 @@ import {
   type QueryKey,
   type UseQueryOptions,
 } from "@tanstack/react-query";
-import { resetDemoData } from "@/lib/data";
+import { resetDemoDataAs } from "@/lib/services/admin/demo";
+import type { Principal } from "@/lib/services/permissions";
 
 export function useRepoQuery<T>(
   queryKey: QueryKey,
@@ -42,11 +43,11 @@ export function useRepoMutation<TVariables, TResult>(
   });
 }
 
-/** MOCK: restores the demo fixtures and refreshes every query on screen. */
-export function useResetDemoData() {
+/** MOCK: restores the demo fixtures (admins only, checked in the service) and refreshes every query on screen. */
+export function useResetDemoData(actor: Principal) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: resetDemoData,
+    mutationFn: () => resetDemoDataAs(actor),
     onSuccess: () => queryClient.invalidateQueries(),
   });
 }

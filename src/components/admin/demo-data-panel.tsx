@@ -4,35 +4,18 @@ import { useState } from "react";
 import { Database, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/admin/confirm-dialog";
+import { useCurrentUser } from "@/components/auth/auth-provider";
 import { QueryState } from "@/components/query-state";
 import { Button } from "@/components/ui/button";
-import { assessments, findings, modules, questions, users, vessels } from "@/lib/data";
 import { useRepoQuery, useResetDemoData } from "@/lib/data/hooks";
 import { errorMessage } from "@/lib/errors";
-
-async function loadSummary() {
-  const [vesselList, moduleList, questionList, userList, assessmentList, findingList] = await Promise.all([
-    vessels.list(),
-    modules.list({ activeOnly: true }),
-    questions.list({ activeOnly: true }),
-    users.list(),
-    assessments.listSubmitted(),
-    findings.list(),
-  ]);
-  return [
-    { label: "Vessels", value: vesselList.length },
-    { label: "Modules", value: moduleList.length },
-    { label: "Questions", value: questionList.length },
-    { label: "Users", value: userList.length },
-    { label: "Assessments", value: assessmentList.length },
-    { label: "Findings", value: findingList.length },
-  ];
-}
+import { loadDemoSummary } from "@/lib/services/admin/demo";
 
 /** MOCK: demo data summary and the "Reset demo data" button. Removed for production. */
 export function DemoDataPanel() {
-  const summary = useRepoQuery(["demo-summary"], loadSummary);
-  const reset = useResetDemoData();
+  const actor = useCurrentUser();
+  const summary = useRepoQuery(["demo-summary"], () => loadDemoSummary(actor));
+  const reset = useResetDemoData(actor);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   async function resetNow() {

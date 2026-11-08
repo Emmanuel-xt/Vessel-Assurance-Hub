@@ -8,7 +8,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { RepositoryError } from "@/lib/data/repositories";
+import { RepositoryError } from "@/lib/data";
 import { errorMessage } from "@/lib/errors";
 import { fieldErrors, loginSchema, type FieldErrors, type LoginValues } from "@/lib/validation/auth";
 import { useAuth } from "./auth-provider";

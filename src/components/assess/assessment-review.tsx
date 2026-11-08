@@ -86,7 +86,8 @@ function Review({ form }: { form: AssessmentForm }) {
   const needPhoto = missingEvidence(sections, responses);
   const required = findingsRequired(sections, responses, findings.drafts);
   const noFinding = noAnswersWithoutFinding(sections, responses, findings.drafts);
-  const ready = missing.length === 0 && needPhoto.length === 0 && required.length === 0 && !findings.loading;
+  const ready =
+    missing.length === 0 && needPhoto.length === 0 && required.length === 0 && !findings.loading && !findings.failed;
   const questionNumber = new Map(sections.flatMap((s) => s.questions).map((q, index) => [q.id, index + 1]));
   const raiseButton = (q: Question, tone: "red" | "amber") => (
     <button
@@ -118,6 +119,8 @@ function Review({ form }: { form: AssessmentForm }) {
         <p className="text-sm text-muted-foreground">{assessment.snapshot.vesselName}</p>
         {assessment.startWork && <StartWorkDetailsLine details={assessment.startWork} />}
       </header>
+
+      {findings.errorBanner}
 
       <ScorePanel scores={scores} sections={sections} label="Live score" />
 

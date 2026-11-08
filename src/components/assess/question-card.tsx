@@ -4,7 +4,7 @@ import { memo, useState } from "react";
 import { Camera, ClipboardX, MessageSquarePlus, Plus, ShieldAlert, Sparkles, TrendingUp } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { ANSWER_LABELS, COMPLIANCE_LABELS, TAG_LABELS } from "@/lib/services/assessments";
+import { ANSWER_LABELS, COMMENT_MAX_LENGTH, COMPLIANCE_LABELS, TAG_LABELS } from "@/lib/services/assessments";
 import { isMissingEvidence, photoSlotsLeft } from "@/lib/services/evidence";
 import { canRaiseFindingFor, requiresFinding } from "@/lib/services/findings";
 import type { Answer, FindingDraft, ID, ObservationTag, Question } from "@/lib/types";
@@ -187,6 +187,7 @@ export const QuestionCard = memo(function QuestionCard({
             id={commentId}
             rows={2}
             placeholder="What did you see?"
+            maxLength={COMMENT_MAX_LENGTH}
             value={value.comment}
             onChange={(e) => onChange(question.id, { comment: e.target.value }, { debounce: true })}
           />

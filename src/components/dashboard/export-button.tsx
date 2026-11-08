@@ -16,7 +16,10 @@ function columnWidths(rows: SheetRows) {
   }));
 }
 
-/** Builds the workbook in the browser (SheetJS, loaded only when clicked). Nothing is uploaded. */
+/**
+ * Builds the workbook in the browser (SheetJS, loaded only when clicked). Nothing is uploaded.
+ * MOCK: fine for the demo's ~300 assessments; production exports large date ranges on the server.
+ */
 export function ExportButton({ data, assessments, period }: { data: PreparedData; assessments: Assessment[]; period: Period }) {
   const [busy, setBusy] = useState(false);
 

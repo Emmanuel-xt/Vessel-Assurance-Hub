@@ -139,6 +139,7 @@ export async function listAllAssessmentRows(actor: Principal, filter: AllAssessm
     to: filter.to ? lagosDayEnd(filter.to) : undefined,
   });
   if (filter.questionId) {
+    // MOCK: scans every response in the browser. Production: a database query (JOIN responses WHERE answer = 'NO').
     const answeredNo = new Set(
       (await responses.list())
         .filter((r) => r.questionId === filter.questionId && r.answer === "NO")

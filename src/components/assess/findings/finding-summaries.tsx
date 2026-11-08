@@ -1,8 +1,9 @@
 "use client";
 
-import { AlertTriangle, CalendarClock, ClipboardX, Pencil, ShieldAlert, UserRound } from "lucide-react";
+import { AlertTriangle, CalendarClock, ClipboardX, Pencil, RotateCw, ShieldAlert, UserRound } from "lucide-react";
 import { useCurrentUser } from "@/components/auth/auth-provider";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { useRepoQuery } from "@/lib/data/hooks";
 import { formatCalendarDate } from "@/lib/format";
 import { RISK_LABELS, listAssessmentFindings } from "@/lib/services/findings";
@@ -65,6 +66,17 @@ export function RaisedFindings({ assessmentId, title = "Findings raised" }: { as
   const user = useCurrentUser();
   const query = useRepoQuery(["findings", "assessment", assessmentId], () => listAssessmentFindings(user, assessmentId));
   const list = query.data ?? [];
+  if (query.isError) {
+    return (
+      <div role="alert" className="flex flex-wrap items-center gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm">
+        <AlertTriangle className="size-4 text-destructive" aria-hidden />
+        <span className="flex-1">Couldn&apos;t load the findings raised: {query.error.message}</span>
+        <Button type="button" variant="outline" size="sm" disabled={query.isFetching} onClick={() => query.refetch()}>
+          <RotateCw className={query.isFetching ? "animate-spin" : undefined} /> Try again
+        </Button>
+      </div>
+    );
+  }
   if (query.isPending || list.length === 0) return null;
 
   return (

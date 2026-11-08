@@ -1,4 +1,4 @@
-import { RepositoryError } from "@/lib/data/repositories";
+import { RepositoryError } from "@/lib/data";
 import { ValidationError } from "@/lib/services/errors";
 import { PermissionError } from "@/lib/services/permissions";
 

@@ -3,7 +3,7 @@ import { ValidationError } from "@/lib/services/errors";
 import { PermissionError, requireRole, type Decision, type Principal } from "@/lib/services/permissions";
 import type { ID } from "@/lib/types";
 
-/** Every admin action starts here. */
+/** Every admin action starts here. MOCK: runs in the browser today; production runs it on the server (see permissions.ts). */
 export function requireAdmin(actor: Principal | null | undefined): Principal {
   return requireRole(actor, "ADMIN");
 }

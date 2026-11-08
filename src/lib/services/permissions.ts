@@ -1,4 +1,7 @@
 // Permission rules (CLAUDE.md §3). Pure functions: the same checks will run on a real backend.
+//
+// MOCK: services receive the `actor` from the page (the signed-in user held in the browser) and run in the browser.
+// Production: services run behind API routes and take the actor from the server-side session, never from the request.
 
 import type { Assessment, AssessmentKind, AuditType, Role, User, UserStatus } from "@/lib/types";
 
