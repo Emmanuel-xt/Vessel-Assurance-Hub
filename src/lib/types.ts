@@ -98,6 +98,8 @@ export interface Question {
   criticalControl: boolean;
   /** A photo is required when the answer is "No" or "Concern Identified". */
   evidenceRequired: boolean;
+  /** "How to check" help shown under the question (one line per bullet; "- " = sub-bullet, "Note:" = note). */
+  guidance: string;
   /** Empty = applies to all vessel types. */
   vesselTypeIds: ID[];
   /** Empty = applies to all audit types. */
@@ -149,6 +151,13 @@ export interface StartWorkActivity {
   updatedAt: ISODateTime;
 }
 
+export interface AssessmentVerification {
+  verifiedById: ID;
+  /** Snapshot for the printed record. */
+  verifiedByName: string;
+  verifiedAt: ISODateTime;
+}
+
 export interface Assessment {
   id: ID;
   /** "VAH-A-YYYY-NNNN", assigned when the draft is created. Deleted drafts leave gaps in the sequence. */
@@ -164,6 +173,8 @@ export interface Assessment {
   startWork: StartWorkDetails | null;
   /** The Start Work Check activity this person joined (START_WORK only); null otherwise. */
   activityId: ID | null;
+  /** Start-Work Verifier sign-off on this person's submitted check (the activity's Auditor or an Admin). */
+  verification: AssessmentVerification | null;
   status: AssessmentStatus;
   /** Whole percent, or null when every answer is N/A (or not yet submitted). */
   overallScore: number | null;

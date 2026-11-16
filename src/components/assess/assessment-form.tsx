@@ -180,6 +180,13 @@ export function AssessmentForm({ form }: { form: FormData }) {
 
       {findings.errorBanner}
 
+      {assessment.kind === "START_WORK" && (
+        <p className="mt-4 rounded-xl border border-teal/40 bg-accent/40 px-3 py-2 text-sm">
+          <span className="font-semibold">Start Work Authority:</span> confirm each item is in place before you start.
+          Stop and seek help if any control is not in place.
+        </p>
+      )}
+
       <div className="mt-4 space-y-3">
         {grouped
           ? sections.map((section) => (

@@ -18,6 +18,7 @@ import type { Principal } from "@/lib/services/permissions";
 import {
   closeActivity,
   createActivity,
+  verifyParticipant,
   findActivityByCode,
   joinActivity,
   listActivities,
@@ -34,7 +35,7 @@ const crew: Principal = { id: "usr-wkr-ibrahim", role: "WORKER", status: "ACTIVE
 const mate: Principal = { id: "usr-wkr-esther", role: "WORKER", status: "ACTIVE" };
 const third: Principal = { id: "usr-wkr-bassey", role: "WORKER", status: "ACTIVE" };
 
-// Hot Work on a PSV: q-hot-work-01..08 (5 core questions + 3 specific; 06 gas testing needs evidence).
+// Hot Work (the IOGP sheet): q-hot-work-01..06; 03 gas test, 05 ignition sources and 06 flammables are critical (w2).
 const setup = (overrides: Partial<ActivitySetupValues> = {}): ActivitySetupValues => ({
   moduleId: "mod-hot-work",
   vesselId: "ves-lady-perpetual",
@@ -167,6 +168,15 @@ describe("closing", () => {
     const late = await joinActivity(mate, activity.id);
     await answerAll(mate, late, {});
 
+    // The verifier signs off each submitted check before the job can be closed.
+    await expect(closeActivity(auditor, activity.id)).rejects.toMatchObject({ code: "CONFLICT" });
+    await expect(verifyParticipant(otherAuditor, done.id)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(verifyParticipant(crew, done.id)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(verifyParticipant(auditor, late.id)).rejects.toMatchObject({ code: "CONFLICT" }); // not submitted
+    const verified = await verifyParticipant(auditor, done.id);
+    expect(verified.verification).toMatchObject({ verifiedById: auditor.id, verifiedByName: "Kemi Olatunji" });
+    await expect(verifyParticipant(admin, done.id)).rejects.toMatchObject({ code: "CONFLICT" }); // only once
+
     await expect(closeActivity(otherAuditor, activity.id)).rejects.toMatchObject({ code: "FORBIDDEN" });
     await expect(closeActivity(crew, activity.id)).rejects.toMatchObject({ code: "FORBIDDEN" });
     const closed = await closeActivity(auditor, activity.id, "  Cleared to start  ");
@@ -184,6 +194,9 @@ describe("closing", () => {
       [crew.id, "SUBMITTED", true],
       [mate.id, "DRAFT", false],
     ]);
+    expect(detail.unverified).toBe(0);
+    // Nothing can be verified once the job is closed.
+    await expect(verifyParticipant(auditor, done.id)).rejects.toMatchObject({ code: "CONFLICT" });
   });
 
   it("lets an admin close any check", async () => {
@@ -232,17 +245,18 @@ describe("Start Work Check answers", () => {
 describe("submitting a Start Work Check", () => {
   it("is scored like any module and stored as a normal Start Work Check assessment", async () => {
     const check = await joinActivity(crew, (await openActivity({ teamSize: 4 })).id);
-    // Weights: core 01 w1, 02 w2, 03 w1, 04 w2, 05 w2, 06 w2, 07 w2, 08 w2 = 14; NO on 08 (w2) → 12/14 = 86%
-    await answerAll(crew, check, { 8: "NO" });
-    // q-hot-work-08 is a critical control: a High-risk finding is required.
-    await addFindingDraft(crew, check.id, "q-hot-work-08", {
-      description: "No hot work permit",
+    // Weights: 01 w1, 02 w1, 03 w2, 04 w1, 05 w2, 06 w2 = 9; NO on 06 (w2) → 7/9 = 78%
+    await answerAll(crew, check, { 6: "NO" });
+    // q-hot-work-06 (flammables) is a critical control: a High-risk finding is required.
+    await expect(submitAssessment(crew, check.id)).rejects.toMatchObject({ name: "ValidationError" });
+    await addFindingDraft(crew, check.id, "q-hot-work-06", {
+      description: "Paint drums left beside the welding bay",
       risk: "HIGH",
       ownerId: crew.id,
       targetDate: defaultTargetDate("HIGH"),
     });
     const submitted = await submitAssessment(crew, check.id);
-    expect(submitted).toMatchObject({ status: "SUBMITTED", kind: "START_WORK", overallScore: 86 });
+    expect(submitted).toMatchObject({ status: "SUBMITTED", kind: "START_WORK", overallScore: 78, verification: null });
 
     const forDashboard = await repo.assessments.listSubmitted({ auditTypeIds: ["at-start-work-check"] });
     expect(forDashboard.map((a) => a.id)).toEqual([check.id]);

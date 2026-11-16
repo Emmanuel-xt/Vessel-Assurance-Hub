@@ -13,7 +13,7 @@ interface ModuleContent {
 }
 
 export const MODULE_CONTENT: Record<string, ModuleContent> = {
-  "mod-marine-start-work": {
+  "mod-deck-work": {
     no: [
       "Permit on the board was for yesterday's lift; new permit not yet signed by the OIM.",
       "Sling certificate for the 10 t shackle could not be found on board.",
@@ -139,6 +139,94 @@ export const MODULE_CONTENT: Record<string, ModuleContent> = {
     good: ["Electrician demonstrated try-out on every isolation point to the team."],
     photos: ["Lock-out board", "Isolation tag", "Hydraulic accumulator"],
   },
+  "mod-bunkering": {
+    no: [
+      "Hose test certificate expired in August; hose still rigged for the transfer.",
+      "Port side scuppers not plugged before pumping started.",
+      "Pre-transfer meeting skipped - receiving unit not told the agreed rate.",
+    ],
+    concern: ["Spill kit on deck, but short of absorbent pads."],
+    good: ["Bunkering checklist read aloud on the radio with the installation - excellent."],
+    photos: ["Bunker hose coupling", "Spill kit", "Scupper plug"],
+  },
+  "mod-personnel-transfer": {
+    no: [
+      "Two passengers in the basket without lifejackets.",
+      "Swell above the transfer limit; transfer still started.",
+      "Receiving deck not told the basket was coming.",
+    ],
+    concern: ["Brief given in English only; two visitors unsure of the signals."],
+    good: ["Coxswain held the transfer for the weather window and briefed everyone again."],
+    photos: ["Personnel basket", "Lifejacket rack", "Transfer briefing card"],
+  },
+  "mod-mechanical-lifting": {
+    no: [
+      "Load chart for the deck crane not in the cab.",
+      "Sling certificate could not be found for the 10 t shackle.",
+      "Exclusion zone not barriered; deckhand walked under the load.",
+    ],
+    concern: ["Tagline rigged, but the signaller was not named in the lift plan."],
+    good: ["Banksman stopped the lift when the wind picked up and re-briefed the crew."],
+    photos: ["Crane load chart", "Lifting sling tag", "Barriered lift zone"],
+  },
+  "mod-de-isolation": {
+    no: ["Isolation removed before the job card was signed off.", "Engine room not told the pump was being re-energised."],
+    concern: ["Vent left open after the line was returned to service."],
+    good: ["Team walked the isolation list point by point before removing locks."],
+    photos: ["Isolation list", "Lock-out board", "Valve tag"],
+  },
+  "mod-energised-electrical": {
+    no: [
+      "Arc flash suit not available for the switchboard work.",
+      "No electrical standby person at the panel.",
+      "Insulated tools past their test date.",
+    ],
+    concern: ["Rubber mat in place, but torn at one corner."],
+    good: ["Electrician tested the voltage detector on a known source before and after the job."],
+    photos: ["Switchboard barrier", "Insulated tools", "Arc flash PPE"],
+  },
+  "mod-man-riding": {
+    no: ["Winch not marked as suitable for man-riding.", "Rescue plan not discussed before the rider went up."],
+    concern: ["Radio check done, hand signals not agreed with the winch operator."],
+    good: ["Spotter kept the rider in sight for the whole lift and called every stop."],
+    photos: ["Man-riding winch", "Rider harness", "Exclusion zone"],
+  },
+  "mod-work-near-water": {
+    no: ["Deckhand at the open stern without a lifejacket.", "Rescue boat crew not told about the overside work."],
+    concern: ["Life ring in place, but its line was tangled."],
+    good: ["Stern gate area roped off and a dedicated watch posted with a life ring."],
+    photos: ["Lifejacket", "Life ring station", "Roped-off stern"],
+  },
+  "mod-mobile-equipment": {
+    no: ["Forklift reversing alarm not working.", "No marked walkway through the laydown area."],
+    concern: ["Wheel chocks available but not used on the slope."],
+    good: ["Banksman walked ahead of the forklift through the whole quayside move."],
+    photos: ["Forklift reversing alarm", "Pedestrian walkway", "Wheel chocks"],
+  },
+  "mod-excavation": {
+    no: ["Cable route drawing not checked before digging.", "Spoil heaped at the trench edge."],
+    concern: ["Barrier tape up, but one side open to the road."],
+    good: ["Team hand-dug to expose the cable before using the excavator."],
+    photos: ["Marked utilities", "Trench shoring", "Barriered excavation"],
+  },
+  "mod-decommissioning": {
+    no: ["Line not flushed before cutting.", "Stored energy in the spring hanger not marked."],
+    concern: ["Asbestos survey done, results not shared with the crew."],
+    good: ["Every isolation colour-coded and checked by two people before cutting started."],
+    photos: ["Colour-coded isolation", "Cleared equipment", "Dropped-object check"],
+  },
+  "mod-rig-floor-tubular": {
+    no: ["Elevator inserts not measured against the tubular.", "Lift nubbin not certified for lifting."],
+    concern: ["Crown saver tested, floor saver test not recorded."],
+    good: ["Driller checked the latch every time the elevators closed."],
+    photos: ["Elevator inserts", "Lift nubbin", "Restricted zone"],
+  },
+  "mod-driving": {
+    no: ["No journey plan for the trip to the base.", "Rear passenger not wearing a seatbelt."],
+    concern: ["Vehicle checked, spare tyre soft."],
+    good: ["Driver pulled over to take the call instead of answering while driving."],
+    photos: ["Vehicle checklist", "Seatbelt", "Journey plan"],
+  },
   "mod-emergency-preparedness": {
     no: [
       "Rescue boat engine test not logged since the last crew change.",
@@ -183,7 +271,19 @@ export const YES_NOTES = [
 
 /** Start Work Check job descriptions per Start Work module. */
 export const TASKS: Record<string, string[]> = {
-  "mod-marine-start-work": [
+  "mod-bunkering": ["Receive MGO from the supply vessel", "Transfer fuel to the installation", "Take on fresh water alongside"],
+  "mod-personnel-transfer": ["Crew change by basket to the installation", "Gangway transfer to the FPSO", "Crew boat transfer of visitors"],
+  "mod-mechanical-lifting": ["Backload of empty baskets", "Lift food containers with the deck crane", "Offload drill pipe from the deck"],
+  "mod-de-isolation": ["Return cooling pump to service", "Re-energise deck crane 2 after repair"],
+  "mod-energised-electrical": ["Fault-find on the live lighting panel", "Test the shore power connection"],
+  "mod-man-riding": ["Inspect the crane boom head by man-riding winch", "Replace sheave at the A-frame top"],
+  "mod-work-near-water": ["Overside hull inspection from the stern", "Retrieve debris from the water at the stern"],
+  "mod-mobile-equipment": ["Forklift moves on the quayside laydown", "Load trucks at the supply base"],
+  "mod-excavation": ["Dig cable trench at the supply base"],
+  "mod-decommissioning": ["Remove redundant pipework on the aft deck"],
+  "mod-rig-floor-tubular": ["Run casing on the rig floor"],
+  "mod-driving": ["Drive crew to the supply base"],
+  "mod-deck-work": [
     "Backload of empty baskets to the supply vessel",
     "Mooring operations at the buoy",
     "Anchor handling preparation on the aft deck",

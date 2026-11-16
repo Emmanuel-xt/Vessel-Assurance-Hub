@@ -19,10 +19,10 @@ import type {
 } from "@/lib/types";
 
 /** Bump the version suffix whenever DemoData changes shape: old saved data is then discarded and reseeded. */
-export const STORAGE_KEY = "vah-demo-v4"; // v4: roles pass + Start Work Check activities (2026-11-16)
+export const STORAGE_KEY = "vah-demo-v5"; // v5: the owner's Start Work Check sheets + verifier sign-off (2026-11-16)
 
 /** Keys used by earlier versions; removed on first load so old copies do not fill up browser storage. */
-export const LEGACY_STORAGE_KEYS = ["vah-demo-v1", "vah-demo-v1-session", "vah-demo-v2", "vah-demo-v2-session", "vah-demo-v3", "vah-demo-v3-session"];
+export const LEGACY_STORAGE_KEYS = ["vah-demo-v1", "vah-demo-v1-session", "vah-demo-v2", "vah-demo-v2-session", "vah-demo-v3", "vah-demo-v3-session", "vah-demo-v4", "vah-demo-v4-session"];
 
 export interface DemoData {
   users: User[];

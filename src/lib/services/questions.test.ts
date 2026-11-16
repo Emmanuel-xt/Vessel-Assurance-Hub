@@ -53,7 +53,15 @@ describe("getQuestionsFor", () => {
 describe("saveQuestion", () => {
   it("adds a question at the end of its module", async () => {
     const created = await saveQuestion(admin, null, form({ weight: 4, criticalControl: true }));
-    expect(created).toMatchObject({ moduleId: "mod-security", displayOrder: 6, weight: 4, criticalControl: true });
+    expect(created).toMatchObject({ moduleId: "mod-security", displayOrder: 6, weight: 4, criticalControl: true, guidance: "" });
+  });
+
+  it("stores trimmed 'How to check' guidance and limits its length", async () => {
+    const created = await saveQuestion(admin, null, form({ guidance: "  Watchman at the gangway\n- logs every visitor  " }));
+    expect(created.guidance).toBe("Watchman at the gangway\n- logs every visitor");
+    await expect(saveQuestion(admin, null, form({ text: "Another gangway check.", guidance: "x".repeat(2001) }))).rejects.toMatchObject({
+      fieldErrors: { guidance: expect.any(String) },
+    });
   });
 
   it("validates weight, text, references and duplicates", async () => {

@@ -76,32 +76,25 @@ browser, mobile and QR code.
 
 ## 6. Modules
 
-15 seeded modules from the design document (admin can add, edit, reorder, deactivate). Bunkering and Personnel
-Transfer were removed on 2026-11-16. Each module has a **category**: `Start Work` or `Assurance`, and Assurance
-modules have **Shown to** roles (empty = everyone; admins see all).
+27 seeded modules (admin can add, edit, reorder, deactivate): the design document's **10 Assurance modules** (the
+LOD 1 Self Assessment list) and the owner's **17 Start Work Check tasks** (`docs/Start Work Checks/`, 2026-11-16).
+Each module has a **category** (`Assurance` or `Start Work`); Assurance modules also have **Shown to** roles
+(empty = everyone; admins see all).
 
-| # | Module | Category |
+| Assurance module | Shown to |
+|---|---|
+| Bridge Team, Navigation Watch, Cargo Operations, Security, Occupational Health, Galley, Emergency Preparedness | Worker, Auditor, Visitor |
+| Leadership Engagement, Contractor Management, Learning & Action Closure | Supervisor, Auditor, Visitor |
+
+| Start Work task | Items | Source |
 |---|---|---|
-| 1 | Marine Start Work | Start Work |
-| 2 | Bridge Team | Assurance |
-| 3 | Navigation Watch | Assurance |
-| 4 | Cargo Operations | Assurance |
-| 5 | Security | Assurance |
-| 6 | Occupational Health | Assurance |
-| 7 | Galley | Assurance |
-| 8 | Working at Height | Start Work |
-| 9 | Confined Space Entry | Start Work |
-| 10 | Hot Work | Start Work |
-| 11 | Energy Isolation | Start Work |
-| 12 | Emergency Preparedness | Assurance |
-| 13 | Leadership Engagement | Assurance (leadership) |
-| 14 | Contractor Management | Assurance (leadership) |
-| 15 | Learning & Action Closure | Assurance (leadership) |
+| Deck Work (`mod-deck-work`, was Marine Start Work) | 20 | Marine Start Work Checks addendum |
+| Bunkering | 18 | Marine addendum (its item 6 repeated item 3 and was dropped) |
+| Offshore Personnel Transfer | 12 | Offshore Personnel Transfer Start Work Checks |
+| Mechanical Lifting 8, Working at Height 8, Hot Work 6, Energy Isolation 6, De-Isolation & Re-Energising 4, Confined Space Entry 7, Energised / Live Electrical Work 8, Man-riding 7, Work Near Water 6, Working Around Mobile Equipment 6, Excavation 9, Decommissioning & Demolition 6, Rig Floor Tubular Handling 7, Driving 8 | 96 | IOGP Life-Saving Rule Start-Work Checks (with "How to (examples)" guidance) |
 
-Crew modules (Bridge Team to Emergency Preparedness) are shown to Worker, Auditor, Visitor; leadership modules to
-Supervisor, Auditor, Visitor.
-
-The category split is an assumption (§15): task-based, Life-Saving-Rule style modules are *Start Work*.
+Start Work tasks are reached only through a Start Work Check (Auditor sets it up, crew join). Bunkering and Personnel
+Transfer came back as Start Work tasks (they were Assurance modules until 2026-11-16).
 
 ## 7. Question bank
 
@@ -118,13 +111,15 @@ Questions are **data, not code**, written in the doc's first-person style ("I ha
 | evidence required | yes / no. When yes, a photo is required **only if the response is `No` or `Concern Identified`** |
 | applicable vessel types | Empty = all vessel types |
 | applicable audit types | Empty = all audit types |
+| guidance | Optional "How to check" help shown behind a toggle under the question; one point per line, `- ` = sub-point, `Note:` = note (`src/lib/guidance.ts`) |
 | display order | Sort order within the module |
 | active | Questions are **never hard-deleted**, only deactivated, so past assessments stay intact |
 
 - Assessments keep a **snapshot** of question text, weight and critical flag at the time of answering, so editing
   or deactivating a question never changes historical scores.
-- Seed content: the doc's 5 core questions (§18) go into every module, plus Claude-drafted, module-specific
-  questions in the same style for the owner to review. Drafted questions are marked as drafts in the fixtures.
+- Seed content: Assurance modules use Claude-drafted, module-specific questions in the doc's style (the doc's 5 core
+  questions open Cargo Operations). **Start Work tasks use the owner's sheets verbatim** (`fixtures/start-work-checks.ts`,
+  146 items, see §15 "Start Work Check sheets").
 
 ## 8. Scoring
 
@@ -164,7 +159,12 @@ Questions are **data, not code**, written in the doc's first-person style ("I ha
 
 ## 10. Dashboard
 
-- **Admin:** full dashboard. **Supervisor:** read-only, fleet-wide.
+- **Admin:** full dashboard plus the Start Work failure trace. **Auditor:** read-only follow-up view (overdue findings,
+  Start Work STOPs, Good Practice with their lists, failure trace). **Supervisor:** read-only fleet view
+  (`dashboardLayoutFor`, see §15 "Dashboard roles pass").
+- **Start Work Check failures:** % of checks stopped (any No) per task, traced to items, vessels and individual checks.
+  **N/A never counts** (left out of every score and rate; its share is shown so overuse is visible).
+- **Score by module** = tiles with their own vessel filter.
 - Headline: **fleet score**, open findings, overdue actions, critical findings, positive interventions.
 - Breakdowns: score by **vessel**, **package**, location, module, audit type; **contractor ranking**
   (contractor = the submitting user's company).
@@ -236,7 +236,7 @@ Everything marked `// MOCK` in code. Keep this list in sync.
 - [ ] `src/lib/data/mock/*`: in-memory + `localStorage` store → real database / API
 - [ ] Simulated network delay → remove
 - [ ] Mock auth (`src/lib/data/mock/auth.ts`): plain-text password check, session = user id in `localStorage`
-      (`vah-demo-v4-session`) → real auth provider, hashed passwords, httpOnly server-side sessions
+      (`vah-demo-v5-session`) → real auth provider, hashed passwords, httpOnly server-side sessions
 - [ ] Client-side route guards (`src/components/auth/guards.tsx`) → keep for UX, but enforce auth/roles on the server
       (middleware + API checks with `src/lib/services/permissions.ts`)
 - [ ] `demo.logInAs` / `demoLogInAs` (passwordless sign-in) → remove
@@ -800,13 +800,73 @@ drop-down of open checks, or other good ways)".
   join. Generator: 258 check events → ~298 assessments, 22 activities, ~71 findings, Topaz Master the only gap vessel.
   History tests now check "about 300" instead of exactly 300.
 
+#### Start Work Check sheets (2026-11-16)
+
+Owner: "go to the docs folder, you will see the list of different start work check tasks, integrate as supposed";
+owner's answers: key barriers only as critical controls, show the guidance, verify each person then close.
+
+- **17 Start Work tasks** from the 16 documents in `docs/Start Work Checks/` (table in §6), replacing the 5 drafted
+  ones. Questions in `src/lib/data/fixtures/start-work-checks.ts` (`START_WORK_BANK`), merged into the bank by
+  `questions.ts`; ids stay `q-<module>-NN` (e.g. `q-hot-work-03` = gas test). Locked by `start-work-checks.test.ts`.
+- **Wording kept as written.** Bullet lists inside an item are joined into one sentence; the sheets' Yes/No branch
+  items ("Does Hot Work require Energy Isolation?", Excavation's hold point) became confirmations with an
+  "N/A if …" note, the follow-up instruction moved into the guidance. Other "N/A if …" notes: Hot Work 3–4,
+  Confined Space 6, Electrical 5, Excavation 7–9.
+- **Critical controls = the key barriers** (1–3 per task, weight 2; 42 in total), e.g. Hot Work gas test / ignition
+  sources / flammables, Energy Isolation locks and tags / zero energy, Working at Height fall protection / 100% tie-off /
+  rescue plan, Bunkering hoses / emergency shutdown / scuppers. Every other No still shows STOP; its finding is optional.
+- **Guidance:** every IOGP item carries its "How to (examples)" text as `Question.guidance` (new field; admin
+  question form textarea; optional `guidance` column in CSV import). The marine sheets have none. The Start Work form
+  shows the sheets' lead-in "Start Work Authority: confirm each item is in place before you start".
+- **No evidence-required items, all vessel types.** Risk categories: Process Safety (isolation, de-isolation, hot
+  work, confined space, electrical), Marine Operations (deck work, personnel transfer), Environment (bunkering),
+  Personal Safety otherwise.
+- **Unbranded:** no client name, project name or document number from the PDFs is copied into the app (tested).
+  The PDFs carry a client "proprietary information" notice: `docs/Start Work Checks/` is not committed.
+- **Start-Work Verifier sign-off per person** (the sheets' verifier column): `Assessment.verification`
+  (`verifiedById`, `verifiedByName`, `verifiedAt`), repository `assessments.verify`, service `verifyParticipant`
+  (the activity's Auditor or an Admin, activity open, check submitted, once). **`closeActivity` refuses until every
+  submitted check is verified**; the button reads "Verify & close". The activity page shows Verify / "Verified by …"
+  per person and "N verified"; the person's own check (screen and print) shows "Start-Work Verifier: name · date" or
+  "Waiting for the Start-Work Verifier".
+- **Demo history:** Start Work tasks weighted to marine work (Deck Work, Mechanical Lifting, Bunkering, Personnel
+  Transfer, Hot Work, Working at Height first; Excavation, Decommissioning, Rig Floor and Driving never); closed checks
+  are verified by their auditor before closing; today's open Dark Knight II Hot Work check has 1 of 2 verified.
+  `PROBLEM_QUESTIONS` moved to the new ids. Storage key **`vah-demo-v5`**.
+
+### Dashboard roles pass (2026-11-16)
+
+Owner: "communicate what is relevant to the Auditor or Admin based on their oversight; take the overdue findings,
+Start Work STOPs and Good Practice cards to the Auditor; show how often a Start Work Check fails (No in %) so the admin
+can trace where the problem is from; N/A only matters where the item does not apply; score by module as tiles with
+its own vessel filter". Owner's answers: Auditor follow-up view; N/A never counts, show its share; failed = any No.
+
+- **Role layouts** (`dashboardLayoutFor(role)` in `src/lib/services/dashboard.ts`):
+  - **Admin:** 6 cards, trend, Start Work failures, module tiles, every breakdown.
+  - **Auditor** ("Auditor dashboard"): a fleet-score line, then the **Overdue findings / Start Work STOPs / Good
+    Practice** cards (they jump to their lists), the follow-up lists (`follow-up.tsx`: most overdue first with
+    owner and days overdue; newest STOPs with the No items and their VAH-S activity; newest Good Practice), Start Work
+    failures, module tiles, trend, vessel, self vs supervisory, top 10, findings. No location / package / contractor.
+  - **Supervisor:** fleet score, submitted, open findings; tiles, trend and every breakdown; no failure trace.
+- **N/A rule:** `answerCounts` / `noRate` (No ÷ answers that apply) / `naShare` (N/A ÷ all answers). N/A never
+  passes or fails a check; scores already skip it. The trace lists items marked N/A on ≥ 30% of checks
+  ("Often marked N/A") so overuse is visible.
+- **Start Work failures** (`startWorkFailures`): failed = any No (the STOP rule); per task checks, failed,
+  failure %, No %, N/A %; worst first. Colours: ≤ 10% green, ≤ 25% amber, else red (`FAILURE_BANDS`).
+  **Trace** (`startWorkTrace`, tap a task): items that stopped work ("Caused 7 of 12 STOPs", link to the checks with
+  that No), failure per vessel (tap = vessel filter), failed checks (newest 20) linking to the check and its Start
+  Work Check activity. `DashboardData` now also loads activities and user names (names only).
+- **Module tiles** (`moduleTiles`, `module-tiles.tsx`): replace the module bar chart; Assurance and Start Work groups,
+  lowest first, score + band word, count, "% stopped" on Start Work tasks; own vessel filter (URL `tileVessel`;
+  unset follows the top-bar vessel, `all` = every vessel); they ignore the top-bar module filter; tap = module filter.
+- **Excel export:** 4th sheet "Start Work" (per task: checks, stopped, stopped %, No %, N/A %).
+
 ## 16. Open questions
 
 _Move answers into §15 once resolved._
 
 1. Real risk category list (currently defaults).
-2. The owner's Start Work Check list and questions (to replace the 5 current Start Work modules' questions).
-3. Notifications for Start Work Checks (e.g. tell the auditor when someone answers No) - not built.
+2. Notifications for Start Work Checks (e.g. tell the auditor when someone answers No) - not built.
 
 ## 17. Progress
 
@@ -884,6 +944,16 @@ _Move answers into §15 once resolved._
       walkthrough (Auditor creates → worker joins by code, answers, submits → second worker joins → Auditor sees
       2 of 3 / 1 submitted, closes → late worker blocked, closed code refused; supervisor blocked from setup; old link
       redirects), no console errors.
+- [x] Start Work Check sheets (2026-11-16): the owner's 17 tasks / 146 items from `docs/Start Work Checks/`, key
+      barriers as critical controls, IOGP "How to check" guidance (toggle, admin field, CSV column), Start-Work
+      Verifier sign-off per person and "Verify & close". Verified: 253 tests, `tsc`, lint, build; headless Edge at
+      375 px (17 tasks in the picker; Bunkering 18 items with Yes / No / N/A; Hot Work guidance opens; close blocked
+      until verified, then closed; verifier line on the worker's record; dashboard renders), no console errors.
+- [x] Dashboard roles pass (2026-11-16): Admin / Auditor / Supervisor layouts, Auditor follow-up lists, Start Work
+      failure % with trace (items, vessels, checks, activities), N/A rule and N/A share, module tiles with their own
+      vessel filter, "Start Work" export sheet. Verified: 262 tests, `tsc`, lint, build; headless Edge at 375 px and
+      1280 px as Admin, Auditor and Supervisor (cards and sections per role, Hot Work trace, tile vessel filter and tile
+      tap, trace link to the activity page), no overflow, no console errors.
 
 ## 18. Source document summary
 
@@ -911,6 +981,15 @@ _Move answers into §15 once resolved._
   4. I know how to stop the job if conditions become unsafe.
   5. I am satisfied the activity can proceed safely.
 - The doc names the client organisation. The UI stays **unbranded**: no client name or logo.
+
+### Start Work Check documents (`docs/Start Work Checks/`, supplied 2026-11-16)
+
+- 14 IOGP Life-Saving Rule **Start-Work Checks** (.docx): numbered "I have confirmed…" items, a Person(s) Performing
+  Work and a Start-Work Verifier initial column, "Stop and seek help if any of the above controls/safeguards are not
+  in place", and a second page "How to (examples)" per item.
+- **Marine Start Work Checks** addendum (PDF): Deck Work (20) and Bunkering (19) checks, answered Yes / No / NA.
+- **Offshore Personnel Transfer Start Work Checks** (PDF): 12 items, Yes / No / NA plus a Remark column.
+- The PDFs name the client and project and are marked proprietary; the app stays unbranded.
 
 ### Fleet Vessel Register (41 vessels: name, package, type)
 

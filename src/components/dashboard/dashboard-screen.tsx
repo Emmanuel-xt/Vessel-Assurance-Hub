@@ -4,6 +4,7 @@ import { useCallback, useMemo } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AlertTriangle, ChevronRight, SearchX, ShieldAlert } from "lucide-react";
+import { formatScore, scoreTone } from "@/components/assess/answer-style";
 import { Button } from "@/components/ui/button";
 import { EmptyState, PageHeader } from "@/components/admin/page-header";
 import { useCurrentUser } from "@/components/auth/auth-provider";
@@ -11,27 +12,53 @@ import { QueryState } from "@/components/query-state";
 import { Badge } from "@/components/ui/badge";
 import { useRepoQuery } from "@/lib/data/hooks";
 import {
+  ALL_VESSELS,
   DEFAULT_FILTER,
   GAP_WARNING_POINTS,
   PRESET_LABELS,
   assessmentsLink,
   computeDashboard,
+  dashboardLayoutFor,
   dashboardQuery,
   loadDashboardData,
   parseDashboardFilter,
   prepareDashboardData,
   type DashboardFilter,
+  type DashboardLayout,
   type DashboardView,
+  type DrillDown,
+  type PreparedData,
   type ScoreRow,
 } from "@/lib/services/dashboard";
-import { canAccessAdmin } from "@/lib/services/permissions";
+import { scoreBandLabel } from "@/lib/services/scoring";
+import { cn } from "@/lib/utils";
 import { ChartCard } from "./chart-card";
 import { FindingsChart, ScoreBars, SelfVsSupervisoryChart, TrendChart } from "./charts";
 import { ExportButton } from "./export-button";
 import { FilterBar } from "./filter-bar";
+import { FollowUpLists } from "./follow-up";
 import { KpiCards } from "./kpi-cards";
+import { ModuleTiles } from "./module-tiles";
+import { StartWorkFailures } from "./start-work-failures";
 
-/** /dashboard: admins and supervisors (read-only). All numbers come from src/lib/services/dashboard.ts. */
+const TITLES: Record<DashboardLayout["role"], string> = {
+  ADMIN: "Dashboard",
+  AUDITOR: "Auditor dashboard",
+  SUPERVISOR: "Dashboard",
+};
+
+const DESCRIPTIONS: Record<DashboardLayout["role"], string> = {
+  ADMIN: "Fleet assurance trends and where Start Work Checks fail. Tap a bar or tile to filter; every chart links to its assessments.",
+  AUDITOR: "What needs your follow-up: overdue findings, Start Work STOPs and Good Practice, then where Start Work Checks fail.",
+  SUPERVISOR: "Fleet assurance trends (read-only). Tap a bar or tile to filter; every chart links to its assessments.",
+};
+
+type DimensionKey = "vesselId" | "locationId" | "moduleId" | "packageId";
+
+/**
+ * /dashboard: supervisors and auditors (read-only) and admins, each with their own layout (`dashboardLayoutFor`).
+ * All numbers come from src/lib/services/dashboard.ts.
+ */
 export function DashboardScreen() {
   const user = useCurrentUser();
   const query = useRepoQuery(["dashboard", "data"], () => loadDashboardData(user), { staleTime: 60_000 });
@@ -53,6 +80,7 @@ function Dashboard({ raw }: { raw: Parameters<typeof prepareDashboardData>[0] })
   const data = useMemo(() => prepareDashboardData(raw), [raw]);
   const filter = useMemo(() => parseDashboardFilter(new URLSearchParams(paramString)), [paramString]);
   const view = useMemo(() => computeDashboard(data, filter), [data, filter]);
+  const layout = dashboardLayoutFor(user.role);
 
   const apply = useCallback(
     (next: DashboardFilter) => {
@@ -63,25 +91,31 @@ function Dashboard({ raw }: { raw: Parameters<typeof prepareDashboardData>[0] })
   );
   const change = useCallback((patch: Partial<DashboardFilter>) => apply({ ...filter, ...patch }), [apply, filter]);
 
-  const link = (extra = {}) => assessmentsLink(filter, view.period, extra);
-  const selectDimension = (key: "vesselId" | "locationId" | "moduleId" | "packageId") => (row: { id: string }) =>
-    change({ [key]: row.id });
+  const link = (extra: DrillDown = {}) => assessmentsLink(filter, view.period, extra);
+  const selectDimension = (key: DimensionKey) => (row: { id: string }) => change({ [key]: row.id });
 
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Dashboard"
-        description={
-          canAccessAdmin(user)
-            ? "Fleet assurance trends. Tap a bar to filter; every chart links to its assessments."
-            : "Fleet assurance trends (read-only). Tap a bar to filter; every chart links to its assessments."
-        }
+        title={TITLES[layout.role]}
+        description={DESCRIPTIONS[layout.role]}
         actions={<ExportButton data={data} assessments={view.assessments} period={view.period} />}
       />
 
       <FilterBar filter={filter} period={view.period} data={data} onChange={change} onReset={() => apply(DEFAULT_FILTER)} />
 
-      <KpiCards kpis={view.kpis} period={view.period} />
+      {layout.role === "AUDITOR" && (
+        <p className="text-sm text-muted-foreground">
+          Fleet score this period:{" "}
+          <span className={cn("font-semibold", scoreTone(view.kpis.fleetScore))}>
+            {formatScore(view.kpis.fleetScore)}
+            {view.kpis.fleetScore !== null && ` ${scoreBandLabel(view.kpis.fleetScore)}`}
+          </span>{" "}
+          · {view.kpis.submitted} assessments · {view.kpis.openFindings} open findings
+        </p>
+      )}
+
+      <KpiCards kpis={view.kpis} period={view.period} cards={layout.cards} linked={layout.followUp} />
 
       {view.assessments.length === 0 ? (
         <EmptyState
@@ -96,7 +130,15 @@ function Dashboard({ raw }: { raw: Parameters<typeof prepareDashboardData>[0] })
           Range: {PRESET_LABELS[filter.preset].toLowerCase()}. Try a longer date range or fewer filters.
         </EmptyState>
       ) : (
-        <Charts view={view} link={link} selectDimension={selectDimension} />
+        <Charts
+          view={view}
+          data={data}
+          layout={layout}
+          filter={filter}
+          link={link}
+          selectDimension={selectDimension}
+          change={change}
+        />
       )}
     </div>
   );
@@ -110,37 +152,83 @@ function summarise(rows: ScoreRow[], noun: string): string {
   return `${scored.length} ${noun}s. Lowest ${low.name} ${low.score}%, highest ${high.name} ${high.score}%.`;
 }
 
+/**
+ * The sections in role order:
+ * - Admin: trend, Start Work failures, module tiles, then every breakdown.
+ * - Auditor: follow-up lists, Start Work failures, module tiles, trend, vessel, self vs supervisory, top 10, findings.
+ * - Supervisor: module tiles, trend, then every breakdown.
+ */
 function Charts({
   view,
+  data,
+  layout,
+  filter,
   link,
   selectDimension,
+  change,
 }: {
   view: DashboardView;
-  link: (extra?: object) => string;
-  selectDimension: (key: "vesselId" | "locationId" | "moduleId" | "packageId") => (row: { id: string }) => void;
+  data: PreparedData;
+  layout: DashboardLayout;
+  filter: DashboardFilter;
+  link: (extra?: DrillDown) => string;
+  selectDimension: (key: DimensionKey) => (row: { id: string }) => void;
+  change: (patch: Partial<DashboardFilter>) => void;
 }) {
   const bucketName = { week: "week", month: "month", quarter: "quarter" }[view.bucket];
   const warnings = view.selfVsSupervisory.filter((r) => r.warning);
   const shownGaps = view.selfVsSupervisory.slice(0, 12);
   const totalFindings = view.findings.reduce((n, r) => n + r.total, 0);
 
+  const trendCard = (
+    <ChartCard
+      className="lg:col-span-2"
+      title="Score trend"
+      description={`Average score per ${bucketName}. Dashed lines: 90% and 75%.`}
+      href={link()}
+      summary={`Average score per ${bucketName}: ${view.trend
+        .filter((p) => p.score !== null)
+        .map((p) => `${p.label} ${p.score}%`)
+        .join(", ")}.`}
+    >
+      <TrendChart points={view.trend} />
+    </ChartCard>
+  );
+
   return (
     <div className="grid gap-4 lg:grid-cols-2">
-      <ChartCard
-        className="lg:col-span-2"
-        title="Score trend"
-        description={`Average score per ${bucketName}. Dashed lines: 90% and 75%.`}
+      {layout.followUp && (
+        <div className="lg:col-span-2">
+          <FollowUpLists view={view} />
+        </div>
+      )}
+
+      {layout.role === "ADMIN" && trendCard}
+
+      {layout.startWork && (
+        <StartWorkFailures
+          data={data}
+          assessments={view.assessments}
+          failures={view.startWork}
+          link={link}
+          onVessel={(vesselId) => change({ vesselId })}
+        />
+      )}
+
+      <ModuleTiles
+        tiles={view.tiles}
+        data={data}
+        selectedModuleId={filter.moduleId}
         href={link()}
-        summary={`Average score per ${bucketName}: ${view.trend
-          .filter((p) => p.score !== null)
-          .map((p) => `${p.label} ${p.score}%`)
-          .join(", ")}.`}
-      >
-        <TrendChart points={view.trend} />
-      </ChartCard>
+        // "All vessels" while the top bar has a vessel needs the explicit "all" value; otherwise unset follows the top bar.
+        onVessel={(vesselId) => change({ tileVesselId: vesselId ?? (filter.vesselId ? ALL_VESSELS : undefined) })}
+        onSelect={(moduleId) => change({ moduleId: filter.moduleId === moduleId ? undefined : moduleId })}
+      />
+
+      {layout.role !== "ADMIN" && trendCard}
 
       <ChartCard
-        className="lg:row-span-2"
+        className={layout.fleetBreakdowns ? "lg:row-span-2" : undefined}
         title="Score by vessel"
         description="Lowest first. Red < 75%, amber 75–89%, green ≥ 90%. Tap a bar to filter."
         href={link()}
@@ -149,26 +237,27 @@ function Charts({
         <ScoreBars rows={view.byVessel} onSelect={selectDimension("vesselId")} />
       </ChartCard>
 
-      <ChartCard title="Score by location" href={link()} summary={summarise(view.byLocation, "location")}>
-        <ScoreBars rows={view.byLocation} onSelect={selectDimension("locationId")} labelWidth={90} />
-      </ChartCard>
+      {layout.fleetBreakdowns && (
+        <>
+          <ChartCard title="Score by location" href={link()} summary={summarise(view.byLocation, "location")}>
+            <ScoreBars rows={view.byLocation} onSelect={selectDimension("locationId")} labelWidth={90} />
+          </ChartCard>
 
-      <ChartCard title="Score by module" description="Full Vessel assessments count for each module." href={link()} summary={summarise(view.byModule, "module")}>
-        <ScoreBars rows={view.byModule} onSelect={selectDimension("moduleId")} labelWidth={150} />
-      </ChartCard>
+          <ChartCard title="Score by package" href={link()} summary={summarise(view.byPackage, "package")}>
+            <ScoreBars rows={view.byPackage} onSelect={selectDimension("packageId")} labelWidth={100} />
+          </ChartCard>
 
-      <ChartCard title="Score by package" href={link()} summary={summarise(view.byPackage, "package")}>
-        <ScoreBars rows={view.byPackage} onSelect={selectDimension("packageId")} labelWidth={100} />
-      </ChartCard>
-
-      <ChartCard
-        title="Contractor ranking"
-        description="By the submitter's company, best first. Tap a bar to see its assessments."
-        href={link()}
-        summary={`Best: ${view.contractors[0]?.name ?? "none"} ${view.contractors[0]?.score ?? ""}%.`}
-      >
-        <ContractorBars rows={view.contractors} link={link} />
-      </ChartCard>
+          <ChartCard
+            className="lg:col-span-2"
+            title="Contractor ranking"
+            description="By the submitter's company, best first. Tap a bar to see its assessments."
+            href={link()}
+            summary={`Best: ${view.contractors[0]?.name ?? "none"} ${view.contractors[0]?.score ?? ""}%.`}
+          >
+            <ContractorBars rows={view.contractors} link={link} />
+          </ChartCard>
+        </>
+      )}
 
       <ChartCard
         className="lg:col-span-2"
@@ -225,12 +314,12 @@ function Charts({
 }
 
 /** Contractor bars open the filtered list (there is no contractor filter on the dashboard itself). */
-function ContractorBars({ rows, link }: { rows: ScoreRow[]; link: (extra?: object) => string }) {
+function ContractorBars({ rows, link }: { rows: ScoreRow[]; link: (extra?: DrillDown) => string }) {
   const router = useRouter();
   return <ScoreBars rows={rows} labelWidth={150} onSelect={(row) => router.push(link({ company: row.id }))} />;
 }
 
-function TopQuestions({ view, link }: { view: DashboardView; link: (extra?: object) => string }) {
+function TopQuestions({ view, link }: { view: DashboardView; link: (extra?: DrillDown) => string }) {
   const max = view.topNonCompliant[0]?.count ?? 1;
   if (view.topNonCompliant.length === 0) {
     return <p className="py-8 text-center text-sm text-muted-foreground">No questions were answered No.</p>;

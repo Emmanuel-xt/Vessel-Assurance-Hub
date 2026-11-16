@@ -62,7 +62,9 @@ describe("validateImport", () => {
       criticalControl: true,
       vesselTypeIds: ["vt-psv", "vt-ahts", "vt-crew-boat"],
       auditTypeIds: ["at-mfe", "at-self-assessment"],
+      guidance: "Radar gain and clutter suit the sea state\nGuard zones are set",
     });
+    expect(result.rows[0].input).toMatchObject({ guidance: "" });
   });
 
   it("matches names ignoring case, in any column order, with defaults for blanks", async () => {

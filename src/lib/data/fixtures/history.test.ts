@@ -8,6 +8,7 @@ import { demoPhotoSvg, isDemoPhotoId } from "./demo-photos";
 import { buildFixtures } from "./index";
 import { generateHistory, STORY } from "./history";
 import { AUDIT_TYPES } from "./lookups";
+import { MODULES } from "./modules";
 import { QUESTIONS } from "./questions";
 import { USERS } from "./users";
 import { FEATURED_VESSELS, VESSELS } from "./vessels";
@@ -44,7 +45,10 @@ describe("generated demo history", () => {
     expect(new Set(history.assessments.map((a) => a.auditTypeId))).toEqual(new Set(AUDIT_TYPES.map((t) => t.id)));
     expect(new Set(history.assessments.map((a) => a.kind))).toEqual(new Set(["MODULE", "START_WORK", "FULL_VESSEL"]));
     const modules = new Set(history.assessments.flatMap((a) => a.moduleIds));
-    expect(modules.size).toBe(15);
+    for (const m of MODULES.filter((x) => x.category === "ASSURANCE")) expect(modules).toContain(m.id);
+    const tasks = MODULES.filter((x) => x.category === "START_WORK" && modules.has(x.id));
+    expect(tasks.length).toBeGreaterThanOrEqual(8); // the common marine / IOGP tasks
+    expect(modules).toContain("mod-deck-work");
   });
 
   it("happens on the 8 featured vessels, two per named location", () => {
@@ -100,10 +104,21 @@ describe("generated demo history", () => {
       expect(team.length).toBeLessThanOrEqual(activity.teamSize);
       expect(new Set(team.map((a) => a.userId)).size).toBe(team.length); // one check per person
       expect(USERS.find((u) => u.id === activity.createdById)?.role).toMatch(/AUDITOR|ADMIN/);
-      if (activity.status === "CLOSED") expect(activity.closedAt! >= (team.at(-1)?.submittedAt ?? "")).toBe(true);
+      if (activity.status === "CLOSED") {
+        expect(activity.closedAt! >= (team.at(-1)?.submittedAt ?? "")).toBe(true);
+        // The verifier signed everyone off before closing.
+        for (const check of team) {
+          expect(check.verification?.verifiedById).toBe(activity.createdById);
+          expect(check.verification!.verifiedAt <= activity.closedAt!).toBe(true);
+          expect(check.verification!.verifiedAt >= check.submittedAt!).toBe(true);
+        }
+      }
     }
     const open = history.startWorkActivities.filter((a) => a.status === "OPEN");
     expect(open).toHaveLength(2);
+    const live = startWork.filter((a) => open.some((o) => o.id === a.activityId));
+    expect(live.filter((a) => a.verification).length).toBe(1); // one verified, one waiting
+    expect(history.assessments.filter((a) => a.kind !== "START_WORK").every((a) => a.verification === null)).toBe(true);
     // The demo worker can join both live checks.
     expect(startWork.some((a) => open.some((o) => o.id === a.activityId) && a.userId === "usr-wkr-ibrahim")).toBe(false);
     expect(new Set(history.startWorkActivities.map((a) => a.code)).size).toBe(history.startWorkActivities.length);

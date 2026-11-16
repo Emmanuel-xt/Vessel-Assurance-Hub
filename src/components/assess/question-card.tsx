@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { ANSWER_STYLES } from "./answer-style";
 import { PendingFindingCard } from "./findings/finding-summaries";
 import { PhotoPickerButtons, PhotoThumbnails } from "./photos";
+import { QuestionGuidance } from "./question-guidance";
 import type { AddPhotosResult, LocalAnswer } from "./use-answer-autosave";
 
 interface QuestionCardProps {
@@ -87,6 +88,7 @@ export const QuestionCard = memo(function QuestionCard({
       <p id={`q-${question.id}-text`} className="text-base leading-snug font-medium">
         {question.text}
       </p>
+      {question.guidance && <QuestionGuidance questionId={question.id} guidance={question.guidance} />}
 
       <div
         role="radiogroup"

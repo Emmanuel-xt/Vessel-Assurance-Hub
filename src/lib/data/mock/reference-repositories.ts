@@ -125,7 +125,7 @@ export const modules: ModulesRepository = crud<"modules", ModuleCreateInput, Mod
 function buildQuestion(input: QuestionCreateInput) {
   requireRow("modules", input.moduleId, "Module");
   requireRow("riskCategories", input.riskCategoryId, "Risk category");
-  return { ...input, id: newId(), active: input.active ?? true };
+  return { ...input, guidance: input.guidance ?? "", id: newId(), active: input.active ?? true };
 }
 
 const isAnswered = (questionId: string) => rows("responses").some((r) => r.questionId === questionId);

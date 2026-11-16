@@ -1,12 +1,13 @@
 // MOCK: seed question bank, written in the design document's first-person style (CLAUDE.md §7).
-// - The document's 5 core questions open every task-based module (Start Work modules and Cargo Operations),
-//   where "fit for duty / stop the job / proceed safely" makes sense. (Personnel Transfer and Bunkering were
-//   removed on 2026-11-16.)
+// - Start Work Check tasks use the owner's own sheets (start-work-checks.ts, 2026-11-16), with guidance.
+// - The design document's 5 core questions open Cargo Operations, where "fit for duty / stop the job / proceed
+//   safely" makes sense.
 // - The owner's question lists are placed in the matching document modules; the rest are drafted by Claude
 //   for the owner to review.
 // - Critical controls weigh 2; everything else weighs 1.
 
 import type { Question } from "@/lib/types";
+import { START_WORK_BANK } from "./start-work-checks";
 
 interface Q {
   text: string;
@@ -15,6 +16,8 @@ interface Q {
   evidence?: boolean;
   /** Vessel type ids this applies to; omit for all. */
   vesselTypes?: string[];
+  /** "How to check" lines (Start Work sheets). */
+  guidance?: string[];
 }
 
 /** Every vessel type except unpowered cargo barges (no bridge, galley or navigation watch). */
@@ -29,16 +32,7 @@ const CORE: Q[] = [
 ];
 
 const BANK: Record<string, Q[]> = {
-  "mod-marine-start-work": [
-    ...CORE,
-    { text: "I am satisfied everyone on this task is competent for their role.", risk: "rc-personal-safety", critical: true },
-    { text: "I have checked the equipment for this task is certified and in date.", risk: "rc-process-safety", evidence: true },
-    { text: "I have a valid permit to work in place and the permit process is being followed.", risk: "rc-process-safety", critical: true, evidence: true },
-    { text: "I have reviewed the task risk assessment with the team.", risk: "rc-process-safety" },
-    { text: "I attended a toolbox talk for this task.", risk: "rc-personal-safety" },
-    { text: "I am wearing the PPE this task requires.", risk: "rc-personal-safety" },
-    { text: "I have checked for SIMOPS conflicts with other activities nearby.", risk: "rc-marine-ops", critical: true },
-  ],
+  ...START_WORK_BANK,
   "mod-bridge-team": [
     { text: "I have tested the communication systems (VHF, UHF and internal) and they work.", risk: "rc-marine-ops", vesselTypes: CREWED_VESSELS },
     { text: "I am satisfied the bridge equipment is defect free, or defects are reported and controlled.", risk: "rc-marine-ops", evidence: true, vesselTypes: CREWED_VESSELS },
@@ -79,30 +73,6 @@ const BANK: Record<string, Q[]> = {
     { text: "I have confirmed galley fire safety equipment (fire blanket, extinguisher, clean extraction hood) is in place.", risk: "rc-personal-safety", vesselTypes: CREWED_VESSELS },
     { text: "I am satisfied galley staff hold valid food-handling certificates.", risk: "rc-health", vesselTypes: CREWED_VESSELS },
   ],
-  "mod-working-at-height": [
-    ...CORE,
-    { text: "I have a working-at-height permit and a rescue plan in place.", risk: "rc-personal-safety", critical: true },
-    { text: "I have inspected my harness and lanyard before use.", risk: "rc-personal-safety", evidence: true },
-    { text: "I am satisfied dropped-object controls are in place below the work area.", risk: "rc-personal-safety", critical: true },
-  ],
-  "mod-confined-space-entry": [
-    ...CORE,
-    { text: "I have confirmed the atmosphere was tested and is safe for entry.", risk: "rc-process-safety", critical: true, evidence: true },
-    { text: "I know who the standby person is and what the rescue plan is.", risk: "rc-personal-safety", critical: true },
-    { text: "I am satisfied the entry permit and isolations are in place.", risk: "rc-process-safety", critical: true },
-  ],
-  "mod-hot-work": [
-    ...CORE,
-    { text: "I have confirmed gas testing was done and the area is clear of flammables.", risk: "rc-process-safety", critical: true, evidence: true },
-    { text: "I know who the fire watch is and that firefighting equipment is ready.", risk: "rc-process-safety", critical: true },
-    { text: "I have a hot work permit for this job.", risk: "rc-process-safety", critical: true },
-  ],
-  "mod-energy-isolation": [
-    ...CORE,
-    { text: "I have confirmed all energy sources are isolated and locked out.", risk: "rc-process-safety", critical: true, evidence: true },
-    { text: "I have tested for zero energy before starting.", risk: "rc-process-safety", critical: true },
-    { text: "I am satisfied the isolation is recorded on the permit.", risk: "rc-process-safety" },
-  ],
   "mod-emergency-preparedness": [
     { text: "I have checked lifesaving equipment is inspected and in date.", risk: "rc-personal-safety", evidence: true },
     { text: "I have checked firefighting equipment is available and ready for use.", risk: "rc-personal-safety", critical: true, evidence: true },
@@ -140,6 +110,7 @@ export const QUESTIONS: Question[] = Object.entries(BANK).flatMap(([moduleId, qu
     weight: q.critical ? 2 : 1,
     criticalControl: q.critical ?? false,
     evidenceRequired: q.evidence ?? false,
+    guidance: (q.guidance ?? []).join("\n"),
     vesselTypeIds: q.vesselTypes ?? [],
     auditTypeIds: [],
     displayOrder: index + 1,

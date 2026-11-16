@@ -157,7 +157,7 @@ describe("All assessments", () => {
   it("offers filter choices by name, without pending sign-ups", async () => {
     const options = await loadFilterOptions(admin);
     expect(options.vessels).toHaveLength(41);
-    expect(options.modules[0].name).toBe("Marine Start Work");
+    expect(options.modules[0].name).toBe("Bridge Team");
     expect(options.users.map((u) => u.id)).not.toContain("usr-pending-samuel");
     expect(options.users.map((u) => u.id)).toContain("usr-disabled-kunle");
   });

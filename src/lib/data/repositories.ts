@@ -5,6 +5,7 @@ import type {
   Action,
   Assessment,
   AssessmentKind,
+  AssessmentVerification,
   AssessmentStatus,
   AuditType,
   Finding,
@@ -127,7 +128,7 @@ export interface QuestionApplicability {
   auditTypeId: ID;
 }
 
-export type QuestionCreateInput = Omit<Question, "id" | "active"> & { active?: boolean };
+export type QuestionCreateInput = Omit<Question, "id" | "active" | "guidance"> & { active?: boolean; guidance?: string };
 
 export interface QuestionsRepository extends CrudRepository<Question, QuestionCreateInput, QuestionFilter> {
   /** Active questions for one module that apply to the vessel type and audit type, in display order. */
@@ -196,6 +197,11 @@ export interface AssessmentsRepository
   submit(id: ID, scores: AssessmentScoresInput): Promise<Assessment>;
   /** Deletes a draft and its responses. Rejects with CONFLICT for submitted assessments. */
   removeDraft(id: ID): Promise<void>;
+  /**
+   * Records the Start-Work Verifier's sign-off on a submitted check. Rejects with CONFLICT for drafts or a check
+   * that is already verified.
+   */
+  verify(id: ID, verifier: Pick<AssessmentVerification, "verifiedById" | "verifiedByName">): Promise<Assessment>;
 }
 
 // ---------- Start Work Check activities ----------

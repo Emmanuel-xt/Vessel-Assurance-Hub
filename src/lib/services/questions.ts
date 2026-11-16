@@ -28,6 +28,8 @@ export async function getQuestionsFor(context: QuestionContext): Promise<Questio
 export const WEIGHT_MIN = 1;
 export const WEIGHT_MAX = 5;
 
+export const GUIDANCE_MAX_LENGTH = 2000;
+
 export const questionFormSchema = z.object({
   moduleId: z.string().min(1, { error: "Choose a module" }),
   text: z
@@ -43,6 +45,12 @@ export const questionFormSchema = z.object({
     .max(WEIGHT_MAX, { error: `Weight must be at most ${WEIGHT_MAX}` }),
   criticalControl: z.boolean(),
   evidenceRequired: z.boolean(),
+  /** "How to check" help, one bullet per line. */
+  guidance: z
+    .string()
+    .trim()
+    .max(GUIDANCE_MAX_LENGTH, { error: `Keep the guidance under ${GUIDANCE_MAX_LENGTH} characters` })
+    .default(""),
   vesselTypeIds: z.array(z.string()),
   auditTypeIds: z.array(z.string()),
   active: z.boolean(),

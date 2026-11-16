@@ -14,10 +14,12 @@ import {
   packages,
   positiveInterventions,
   responses,
+  startWorkActivities,
+  users,
   vessels,
 } from "@/lib/data";
 import { addDays } from "@/lib/services/findings";
-import { isOverdue } from "@/lib/services/overdue";
+import { businessToday, isOverdue as isActionOverdue } from "@/lib/services/overdue";
 import { PermissionError, canViewDashboard, requireUser, type Principal } from "@/lib/services/permissions";
 import { scoreBand, type ScoreBand } from "@/lib/services/scoring";
 import type {
@@ -31,9 +33,12 @@ import type {
   ISODate,
   LookupItem,
   Module,
+  ModuleCategory,
   PositiveIntervention,
   Response,
   RiskLevel,
+  Role,
+  StartWorkActivity,
   Vessel,
   WorkStatus,
 } from "@/lib/types";
@@ -53,6 +58,10 @@ export interface DashboardData {
   packages: LookupItem[];
   modules: Module[];
   auditTypes: AuditType[];
+  /** Start Work Check activities (for the failure trace: reference, who set it up). */
+  startWorkActivities: StartWorkActivity[];
+  /** Names only (action owners, recorded by); no other user fields reach the page. */
+  people: { id: ID; name: string }[];
 }
 
 /**
@@ -63,8 +72,20 @@ export interface DashboardData {
 export async function loadDashboardData(actor: Principal): Promise<DashboardData> {
   const user = requireUser(actor);
   if (!canViewDashboard(user)) throw new PermissionError("FORBIDDEN", "Only supervisors, auditors and admins can see the dashboard.");
-  const [submitted, allResponses, findingList, actionList, interventions, vesselList, locationList, packageList, moduleList, typeList] =
-    await Promise.all([
+  const [
+    submitted,
+    allResponses,
+    findingList,
+    actionList,
+    interventions,
+    vesselList,
+    locationList,
+    packageList,
+    moduleList,
+    typeList,
+    activityList,
+    userList,
+  ] = await Promise.all([
       assessments.listSubmitted(),
       responses.list(),
       findings.list(),
@@ -75,6 +96,8 @@ export async function loadDashboardData(actor: Principal): Promise<DashboardData
       packages.list(),
       modules.list(),
       auditTypes.list(),
+      startWorkActivities.list(),
+      users.list(),
     ]);
   const ids = new Set(submitted.map((a) => a.id));
   return {
@@ -88,6 +111,8 @@ export async function loadDashboardData(actor: Principal): Promise<DashboardData
     packages: packageList,
     modules: moduleList,
     auditTypes: typeList,
+    startWorkActivities: activityList,
+    people: userList.map((u) => ({ id: u.id, name: u.name })),
   };
 }
 
@@ -104,7 +129,10 @@ export interface PreparedData extends DashboardData {
     package: Map<ID, string>;
     module: Map<ID, string>;
     auditType: Map<ID, string>;
+    person: Map<ID, string>;
   };
+  moduleById: Map<ID, Module>;
+  activityById: Map<ID, StartWorkActivity>;
   /** Lagos submission date per assessment. */
   dateOf: Map<ID, ISODate>;
 }
@@ -138,7 +166,10 @@ export function prepareDashboardData(data: DashboardData): PreparedData {
       package: nameMap(data.packages),
       module: nameMap(data.modules),
       auditType: nameMap(data.auditTypes),
+      person: nameMap(data.people),
     },
+    moduleById: new Map(data.modules.map((m) => [m.id, m])),
+    activityById: new Map(data.startWorkActivities.map((x) => [x.id, x])),
     dateOf: new Map(data.assessments.map((a) => [a.id, lagosDateOf(a.submittedAt!)])),
   };
 }
@@ -172,7 +203,15 @@ export interface DashboardFilter {
   auditTypeId?: ID;
   packageId?: ID;
   scope: Scope;
+  /**
+   * The module tiles' own vessel filter. Unset = follow the top-bar vessel; "all" = every vessel even when the top bar
+   * has one.
+   */
+  tileVesselId?: ID;
 }
+
+/** `tileVesselId` value for "All vessels". */
+export const ALL_VESSELS = "all";
 
 export const DEFAULT_FILTER: DashboardFilter = { preset: "thisYear", scope: "all" };
 
@@ -205,6 +244,8 @@ export function parseDashboardFilter(params: URLSearchParams): DashboardFilter {
     const value = params.get(key);
     if (value) filter[field] = value;
   }
+  const tileVessel = params.get("tileVessel");
+  if (tileVessel) filter.tileVesselId = tileVessel;
   return filter;
 }
 
@@ -220,6 +261,7 @@ export function dashboardQuery(filter: DashboardFilter): string {
     if (filter[field]) params.set(key, filter[field]!);
   }
   if (filter.scope !== DEFAULT_FILTER.scope) params.set("scope", filter.scope);
+  if (filter.tileVesselId) params.set("tileVessel", filter.tileVesselId);
   return params.toString();
 }
 
@@ -228,6 +270,7 @@ export interface DrillDown {
   locationId?: ID;
   moduleId?: ID;
   packageId?: ID;
+  auditTypeId?: ID;
   /** Submitter's company. */
   company?: string;
   /** Assessments that answered No to this question. */
@@ -394,7 +437,7 @@ function findingsOf(data: PreparedData, list: Assessment[]): Finding[] {
 }
 
 export function isFindingOverdue(data: PreparedData, finding: Finding, today: Date): boolean {
-  return finding.status !== "CLOSED" && (data.actionsByFinding.get(finding.id) ?? []).some((a) => isOverdue(a, today));
+  return finding.status !== "CLOSED" && (data.actionsByFinding.get(finding.id) ?? []).some((a) => isActionOverdue(a, today));
 }
 
 export function hasStop(data: PreparedData, assessment: Assessment): boolean {
@@ -613,6 +656,433 @@ export function findingsByStatusAndRisk(data: PreparedData, list: Assessment[]):
   return [...rows.values()];
 }
 
+// ---------- N/A rule ----------
+//
+// N/A means "this item does not apply here" (the activity is not happening, or the thing does not exist on this
+// vessel). It never passes or fails anything: it is left out of every score (scoring.ts) and of every rate below.
+// It is still counted on its own (`naShare`) so overuse is visible.
+
+export interface AnswerCounts {
+  yes: number;
+  concern: number;
+  no: number;
+  na: number;
+  /** Every answer. */
+  total: number;
+  /** Answers that apply (everything except N/A). */
+  applicable: number;
+}
+
+export function answerCounts(list: Pick<Response, "answer">[]): AnswerCounts {
+  const counts: AnswerCounts = { yes: 0, concern: 0, no: 0, na: 0, total: 0, applicable: 0 };
+  for (const r of list) {
+    counts.total += 1;
+    if (r.answer === "NA") counts.na += 1;
+    else {
+      counts.applicable += 1;
+      if (r.answer === "YES") counts.yes += 1;
+      else if (r.answer === "NO") counts.no += 1;
+      else counts.concern += 1;
+    }
+  }
+  return counts;
+}
+
+/** Whole percent, or null when there is nothing to divide by. */
+export function percent(part: number, whole: number): number | null {
+  return whole === 0 ? null : Math.round((part / whole) * 100);
+}
+
+/** No answers as a share of the answers that apply (N/A left out). */
+export const noRate = (c: AnswerCounts) => percent(c.no, c.applicable);
+/** N/A answers as a share of all answers. */
+export const naShare = (c: AnswerCounts) => percent(c.na, c.total);
+
+// ---------- Start Work Check failures ----------
+
+/** A Start Work Check fails (STOP) when any item is answered No. Failure-rate colours: ≤ 10% green, ≤ 25% amber. */
+export const FAILURE_BANDS = { green: 10, amber: 25 } as const;
+
+export function failureBand(rate: number | null): ScoreBand {
+  if (rate === null) return "none";
+  if (rate <= FAILURE_BANDS.green) return "green";
+  if (rate <= FAILURE_BANDS.amber) return "amber";
+  return "red";
+}
+
+export interface FailureRow {
+  checks: number;
+  /** Checks with at least one No. */
+  failed: number;
+  /** failed / checks, whole percent. */
+  failureRate: number | null;
+  band: ScoreBand;
+}
+
+export interface StartWorkTaskRow extends FailureRow {
+  moduleId: ID;
+  name: string;
+  /** No answers / answers that apply. */
+  noRate: number | null;
+  /** N/A answers / all answers. */
+  naShare: number | null;
+}
+
+export interface StartWorkFailures extends FailureRow {
+  /** Highest failure rate first. */
+  tasks: StartWorkTaskRow[];
+}
+
+const startWorkChecks = (list: Assessment[]) => list.filter((a) => a.kind === "START_WORK");
+
+function failureRow(checks: number, failed: number): FailureRow {
+  const failureRate = percent(failed, checks);
+  return { checks, failed, failureRate, band: failureBand(failureRate) };
+}
+
+const worstFirst = <T extends FailureRow & { name: string }>(a: T, b: T) =>
+  (b.failureRate ?? -1) - (a.failureRate ?? -1) || b.failed - a.failed || a.name.localeCompare(b.name);
+
+/** How often each Start Work task stops (any No), with the No and N/A rates behind it. */
+export function startWorkFailures(data: PreparedData, list: Assessment[]): StartWorkFailures {
+  const checks = startWorkChecks(list);
+  const tasks: StartWorkTaskRow[] = [];
+  for (const [moduleId, items] of groupBy(checks, (a) => a.moduleIds[0])) {
+    const answers = answerCounts(items.flatMap((a) => data.responsesByAssessment.get(a.id) ?? []));
+    tasks.push({
+      moduleId,
+      name: data.names.module.get(moduleId) ?? "Unknown",
+      ...failureRow(items.length, items.filter((a) => hasStop(data, a)).length),
+      noRate: noRate(answers),
+      naShare: naShare(answers),
+    });
+  }
+  return { ...failureRow(checks.length, checks.filter((a) => hasStop(data, a)).length), tasks: tasks.sort(worstFirst) };
+}
+
+export interface StartWorkItemRow {
+  questionId: ID;
+  /** Wording as last answered. */
+  text: string;
+  critical: boolean;
+  yes: number;
+  no: number;
+  na: number;
+  noRate: number | null;
+  naShare: number | null;
+  /** Failed checks of this task with a No on this item ("caused 7 of 12 STOPs"). */
+  stops: number;
+  /** stops / failed checks of the task. */
+  stopShare: number | null;
+}
+
+export interface FailedCheckRow {
+  assessmentId: ID;
+  reference: string;
+  submittedAt: string;
+  moduleId: ID;
+  moduleName: string;
+  vesselId: ID;
+  vesselName: string;
+  person: string;
+  company: string;
+  activity: { id: ID; reference: string; createdByName: string } | null;
+  /** Items answered No. */
+  noItems: string[];
+}
+
+export interface VesselFailureRow extends FailureRow {
+  id: ID;
+  name: string;
+}
+
+export interface StartWorkTrace extends FailureRow {
+  moduleId: ID;
+  name: string;
+  /** Every item answered on this task, the ones that stopped work most first. */
+  items: StartWorkItemRow[];
+  /** Worst vessel first. */
+  vessels: VesselFailureRow[];
+  /** Newest first, capped. */
+  failedChecks: FailedCheckRow[];
+}
+
+function failedCheckRow(data: PreparedData, a: Assessment): FailedCheckRow {
+  const activity = a.activityId ? data.activityById.get(a.activityId) : undefined;
+  const moduleId = a.moduleIds[0];
+  return {
+    assessmentId: a.id,
+    reference: a.reference,
+    submittedAt: a.submittedAt!,
+    moduleId,
+    moduleName: data.names.module.get(moduleId) ?? "Unknown",
+    vesselId: a.vesselId,
+    vesselName: data.names.vessel.get(a.vesselId) ?? a.snapshot.vesselName,
+    person: a.snapshot.userName,
+    company: a.snapshot.company,
+    activity: activity ? { id: activity.id, reference: activity.reference, createdByName: activity.snapshot.createdByName } : null,
+    noItems: (data.responsesByAssessment.get(a.id) ?? []).filter((r) => r.answer === "NO").map((r) => r.questionSnapshot.text),
+  };
+}
+
+const newestFirst = (a: Assessment, b: Assessment) => b.submittedAt!.localeCompare(a.submittedAt!);
+
+/** Failed Start Work Checks (any task), newest first. */
+export function failedStartWorkChecks(data: PreparedData, list: Assessment[], limit = 8): { total: number; rows: FailedCheckRow[] } {
+  const failed = startWorkChecks(list).filter((a) => hasStop(data, a)).sort(newestFirst);
+  return { total: failed.length, rows: failed.slice(0, limit).map((a) => failedCheckRow(data, a)) };
+}
+
+/** Where one task's STOPs come from: which items, which vessels, which checks. */
+export function startWorkTrace(data: PreparedData, list: Assessment[], moduleId: ID, limit = 20): StartWorkTrace {
+  const checks = startWorkChecks(list).filter((a) => a.moduleIds[0] === moduleId);
+  const failed = checks.filter((a) => hasStop(data, a));
+  const failedIds = new Set(failed.map((a) => a.id));
+
+  const items = new Map<ID, StartWorkItemRow & { lastAt: string; answers: Response[] }>();
+  for (const a of checks) {
+    for (const r of data.responsesByAssessment.get(a.id) ?? []) {
+      let row = items.get(r.questionId);
+      if (!row) {
+        row = {
+          questionId: r.questionId,
+          text: r.questionSnapshot.text,
+          critical: r.questionSnapshot.criticalControl,
+          yes: 0,
+          no: 0,
+          na: 0,
+          noRate: null,
+          naShare: null,
+          stops: 0,
+          stopShare: null,
+          lastAt: r.updatedAt,
+          answers: [],
+        };
+        items.set(r.questionId, row);
+      } else if (r.updatedAt > row.lastAt) {
+        row.text = r.questionSnapshot.text;
+        row.critical = r.questionSnapshot.criticalControl;
+        row.lastAt = r.updatedAt;
+      }
+      row.answers.push(r);
+      if (r.answer === "NO" && failedIds.has(a.id)) row.stops += 1;
+    }
+  }
+  const itemRows: StartWorkItemRow[] = [...items.values()]
+    .map((row) => {
+      const c = answerCounts(row.answers);
+      return {
+        questionId: row.questionId,
+        text: row.text,
+        critical: row.critical,
+        yes: c.yes,
+        no: c.no,
+        na: c.na,
+        noRate: noRate(c),
+        naShare: naShare(c),
+        stops: row.stops,
+        stopShare: percent(row.stops, failed.length),
+      };
+    })
+    .sort((a, b) => b.stops - a.stops || (b.noRate ?? -1) - (a.noRate ?? -1) || a.questionId.localeCompare(b.questionId));
+
+  const vesselRows: VesselFailureRow[] = [...groupBy(checks, (a) => a.vesselId)]
+    .map(([id, group]) => ({
+      id,
+      name: data.names.vessel.get(id) ?? group[0].snapshot.vesselName,
+      ...failureRow(group.length, group.filter((a) => failedIds.has(a.id)).length),
+    }))
+    .sort(worstFirst);
+
+  return {
+    moduleId,
+    name: data.names.module.get(moduleId) ?? "Unknown",
+    ...failureRow(checks.length, failed.length),
+    items: itemRows,
+    vessels: vesselRows,
+    failedChecks: [...failed].sort(newestFirst).slice(0, limit).map((a) => failedCheckRow(data, a)),
+  };
+}
+
+// ---------- Auditor follow-up lists ----------
+
+export interface OverdueFindingRow {
+  findingId: ID;
+  reference: string;
+  assessmentId: ID;
+  vesselName: string;
+  moduleName: string | null;
+  description: string;
+  risk: RiskLevel;
+  critical: boolean;
+  /** The most overdue open action. */
+  actionReference: string;
+  ownerName: string;
+  targetDate: ISODate;
+  daysOverdue: number;
+}
+
+const DAY_MS = 86_400_000;
+const daysBetween = (from: ISODate, to: ISODate) => Math.round((Date.parse(to) - Date.parse(from)) / DAY_MS);
+
+/** Findings on the selected assessments with an action past its target date, most overdue first. */
+export function overdueFindingList(
+  data: PreparedData,
+  list: Assessment[],
+  now: Date,
+  limit = 10,
+): { total: number; rows: OverdueFindingRow[] } {
+  const today = businessToday(now);
+  const rows: OverdueFindingRow[] = [];
+  for (const f of findingsOf(data, list)) {
+    if (f.status === "CLOSED") continue;
+    const late = (data.actionsByFinding.get(f.id) ?? [])
+      .filter((a) => isActionOverdue(a, now))
+      .sort((a, b) => a.targetDate.localeCompare(b.targetDate))[0];
+    if (!late) continue;
+    rows.push({
+      findingId: f.id,
+      reference: f.reference,
+      assessmentId: f.assessmentId,
+      vesselName: data.names.vessel.get(f.vesselId) ?? "Unknown",
+      moduleName: f.moduleId ? (data.names.module.get(f.moduleId) ?? null) : null,
+      description: f.description,
+      risk: f.risk,
+      critical: f.critical,
+      actionReference: late.reference,
+      ownerName: data.names.person.get(late.ownerId) ?? "Unknown",
+      targetDate: late.targetDate,
+      daysOverdue: daysBetween(late.targetDate, today),
+    });
+  }
+  rows.sort((a, b) => b.daysOverdue - a.daysOverdue || a.reference.localeCompare(b.reference));
+  return { total: rows.length, rows: rows.slice(0, limit) };
+}
+
+export interface GoodPracticeRow {
+  id: ID;
+  reference: string;
+  assessmentId: ID;
+  vesselName: string;
+  moduleName: string | null;
+  description: string;
+  recordedBy: string;
+  recordedAt: string;
+}
+
+/** Positive interventions on the selected assessments, newest first. */
+export function goodPracticeList(data: PreparedData, list: Assessment[], limit = 8): { total: number; rows: GoodPracticeRow[] } {
+  const ids = new Set(list.map((a) => a.id));
+  const items = data.positiveInterventions
+    .filter((p) => ids.has(p.assessmentId))
+    .sort((a, b) => b.recordedAt.localeCompare(a.recordedAt) || b.reference.localeCompare(a.reference));
+  return {
+    total: items.length,
+    rows: items.slice(0, limit).map((p) => ({
+      id: p.id,
+      reference: p.reference,
+      assessmentId: p.assessmentId,
+      vesselName: data.names.vessel.get(p.vesselId) ?? "Unknown",
+      moduleName: p.moduleId ? (data.names.module.get(p.moduleId) ?? null) : null,
+      description: p.description,
+      recordedBy: data.names.person.get(p.recordedById) ?? "Unknown",
+      recordedAt: p.recordedAt,
+    })),
+  };
+}
+
+// ---------- Module tiles ----------
+
+export interface ModuleTile extends ScoreRow {
+  category: ModuleCategory;
+  displayOrder: number;
+  /** Start Work tasks only: share of checks stopped. */
+  failureRate: number | null;
+  failureBand: ScoreBand;
+}
+
+export interface ModuleTiles {
+  /** Lowest score first. */
+  assurance: ModuleTile[];
+  startWork: ModuleTile[];
+  /** Active modules with no assessment in the selection. */
+  withoutData: { assurance: number; startWork: number };
+  /** The vessel the tiles show (null = every vessel). */
+  vesselId: ID | null;
+}
+
+/** The vessel the tiles use: their own choice, else the top-bar vessel. */
+export function tileVesselOf(filter: DashboardFilter): ID | null {
+  if (filter.tileVesselId === ALL_VESSELS) return null;
+  return filter.tileVesselId ?? filter.vesselId ?? null;
+}
+
+/**
+ * Score per module as tiles. They keep the dashboard's date, scope, location, package and audit type filters but not its
+ * module filter (so every module stays visible) and use their own vessel filter.
+ */
+export function moduleTiles(data: PreparedData, filter: DashboardFilter, period: Period): ModuleTiles {
+  const vesselId = tileVesselOf(filter);
+  const list = filterAssessments(data, { ...filter, moduleId: undefined, vesselId: vesselId ?? undefined }, period);
+  const failures = new Map(startWorkFailures(data, list).tasks.map((t) => [t.moduleId, t]));
+  const tiles = scoreByModule(data, list).map((row): ModuleTile => {
+    const mod = data.moduleById.get(row.id);
+    const failureRate = failures.get(row.id)?.failureRate ?? null;
+    return {
+      ...row,
+      category: mod?.category ?? "ASSURANCE",
+      displayOrder: mod?.displayOrder ?? Number.MAX_SAFE_INTEGER,
+      failureRate,
+      failureBand: failureBand(failureRate),
+    };
+  });
+  const shown = new Set(tiles.map((t) => t.id));
+  const missing = (category: ModuleCategory) =>
+    data.modules.filter((m) => m.active && m.category === category && !shown.has(m.id)).length;
+  return {
+    assurance: tiles.filter((t) => t.category === "ASSURANCE"),
+    startWork: tiles.filter((t) => t.category === "START_WORK"),
+    withoutData: { assurance: missing("ASSURANCE"), startWork: missing("START_WORK") },
+    vesselId,
+  };
+}
+
+// ---------- What each role sees ----------
+
+export type KpiKey = "fleetScore" | "submitted" | "openFindings" | "overdueFindings" | "goodPractice" | "stopChecks";
+
+export interface DashboardLayout {
+  role: "ADMIN" | "AUDITOR" | "SUPERVISOR";
+  /** Headline cards, in order. */
+  cards: KpiKey[];
+  /** Auditor: lists behind the overdue / STOP / Good Practice cards. */
+  followUp: boolean;
+  /** Start Work Check failure trace. */
+  startWork: boolean;
+  /** Fleet-management breakdowns (location, package, contractor). */
+  fleetBreakdowns: boolean;
+}
+
+/**
+ * Admin: everything. Auditor: follow-up first (overdue findings, STOPs, Good Practice) and the Start Work failure trace.
+ * Supervisor: the fleet view without the follow-up cards.
+ */
+export function dashboardLayoutFor(role: Role): DashboardLayout {
+  if (role === "ADMIN") {
+    return {
+      role,
+      cards: ["fleetScore", "submitted", "openFindings", "overdueFindings", "goodPractice", "stopChecks"],
+      followUp: false,
+      startWork: true,
+      fleetBreakdowns: true,
+    };
+  }
+  if (role === "AUDITOR") {
+    return { role, cards: ["overdueFindings", "stopChecks", "goodPractice"], followUp: true, startWork: true, fleetBreakdowns: false };
+  }
+  return { role: "SUPERVISOR", cards: ["fleetScore", "submitted", "openFindings"], followUp: false, startWork: false, fleetBreakdowns: true };
+}
+
 // ---------- Everything for one filter ----------
 
 export interface DashboardView {
@@ -630,6 +1100,13 @@ export interface DashboardView {
   selfVsSupervisory: SelfVsSupervisoryRow[];
   topNonCompliant: NonCompliantQuestion[];
   findings: FindingsByStatusRow[];
+  startWork: StartWorkFailures;
+  tiles: ModuleTiles;
+  followUp: {
+    overdue: { total: number; rows: OverdueFindingRow[] };
+    stops: { total: number; rows: FailedCheckRow[] };
+    goodPractice: { total: number; rows: GoodPracticeRow[] };
+  };
 }
 
 export function computeDashboard(data: PreparedData, filter: DashboardFilter, now: Date = new Date()): DashboardView {
@@ -654,6 +1131,13 @@ export function computeDashboard(data: PreparedData, filter: DashboardFilter, no
     selfVsSupervisory: selfVsSupervisory(data, current),
     topNonCompliant: topNonCompliant(data, current),
     findings: findingsByStatusAndRisk(data, current),
+    startWork: startWorkFailures(data, current),
+    tiles: moduleTiles(data, filter, period),
+    followUp: {
+      overdue: overdueFindingList(data, current, now),
+      stops: failedStartWorkChecks(data, current),
+      goodPractice: goodPracticeList(data, current),
+    },
   };
 }
 
@@ -671,7 +1155,7 @@ export function lagosDateTime(timestamp: string): string {
   return new Date(Date.parse(timestamp) + 3_600_000).toISOString().slice(0, 16).replace("T", " ");
 }
 
-/** Rows for the three sheets (Assessments, Responses, Findings) of the filtered assessments. */
+/** Rows for the four sheets (Assessments, Responses, Findings, Start Work) of the filtered assessments. */
 export function exportRows(data: PreparedData, list: Assessment[], now: Date = new Date()) {
   const kind = { MODULE: "Module", FULL_VESSEL: "Full Vessel Assurance", START_WORK: "Start Work Check" } as const;
   const ref = new Map(list.map((a) => [a.id, a.reference]));
@@ -733,5 +1217,15 @@ export function exportRows(data: PreparedData, list: Assessment[], now: Date = n
     };
   });
 
-  return { Assessments: assessmentRows, Responses: responseRows, Findings: findingRows };
+  const pct = (v: number | null) => v ?? "";
+  const startWorkRows: SheetRows = startWorkFailures(data, list).tasks.map((t) => ({
+    Task: t.name,
+    Checks: t.checks,
+    "Stopped (any No)": t.failed,
+    "Stopped %": pct(t.failureRate),
+    "No % (N/A left out)": pct(t.noRate),
+    "N/A % of answers": pct(t.naShare),
+  }));
+
+  return { Assessments: assessmentRows, Responses: responseRows, Findings: findingRows, "Start Work": startWorkRows };
 }

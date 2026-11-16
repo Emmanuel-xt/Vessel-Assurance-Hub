@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
+  BadgeCheck,
   CheckCircle2,
   ChevronRight,
   ClipboardList,
@@ -36,6 +37,7 @@ import {
   closeActivity,
   joinActivity,
   loadActivity,
+  verifyParticipant,
   type ActivityDetail,
   type ActivityParticipant,
 } from "@/lib/services/start-work-activities";
@@ -138,6 +140,7 @@ function ActivityView({ data }: { data: ActivityDetail }) {
           </h2>
           <p className="text-sm text-muted-foreground">
             {data.joined} of {activity.teamSize} joined · {data.submitted} submitted
+            {data.submitted > 0 && ` · ${data.submitted - data.unverified} verified`}
             {isOpen && placesLeft > 0 && ` · ${placesLeft} ${placesLeft === 1 ? "place" : "places"} left`}
           </p>
         </div>
@@ -148,7 +151,7 @@ function ActivityView({ data }: { data: ActivityDetail }) {
         ) : (
           <ul className="divide-y rounded-2xl border bg-card">
             {participants.map((p) => (
-              <ParticipantRow key={p.assessment.id} participant={p} activityOpen={isOpen} />
+              <ParticipantRow key={p.assessment.id} participant={p} activityOpen={isOpen} activityReference={activity.reference} />
             ))}
           </ul>
         )}
@@ -270,47 +273,97 @@ function ShareCard({ data }: { data: ActivityDetail }) {
   );
 }
 
-function ParticipantRow({ participant, activityOpen }: { participant: ActivityParticipant; activityOpen: boolean }) {
-  const { assessment, noCount, canOpen } = participant;
+function ParticipantRow({
+  participant,
+  activityOpen,
+  activityReference,
+}: {
+  participant: ActivityParticipant;
+  activityOpen: boolean;
+  activityReference: string;
+}) {
+  const user = useCurrentUser();
+  const { assessment, noCount, canOpen, canVerify } = participant;
+  const [confirming, setConfirming] = useState(false);
+  const verify = useRepoMutation(() => verifyParticipant(user, assessment.id), {
+    invalidates: [["startWorkActivities"], ["assessments"]],
+    onSuccess: () => toast.success(`${assessment.snapshot.userName}'s check verified`),
+  });
   const submitted = assessment.status === "SUBMITTED";
-  const body = (
-    <>
-      <span className="min-w-0 flex-1">
-        <span className="block font-medium">{assessment.snapshot.userName}</span>
-        <span className="block text-xs text-muted-foreground">
-          {assessment.snapshot.position} · {assessment.snapshot.company}
-        </span>
+  const verification = assessment.verification;
+
+  const person = (
+    <span className="min-w-0 flex-1">
+      <span className="block font-medium">{assessment.snapshot.userName}</span>
+      <span className="block text-xs text-muted-foreground">
+        {assessment.snapshot.position} · {assessment.snapshot.company}
       </span>
-      {submitted ? (
-        <span className="flex items-center gap-2">
-          {noCount > 0 ? (
-            <Badge variant="destructive">
-              <OctagonX /> STOP · {noCount} No
-            </Badge>
-          ) : (
-            <Badge className="bg-emerald-700 text-white">
-              <CheckCircle2 /> All clear
-            </Badge>
-          )}
-          <ScoreValue score={assessment.overallScore} layout="inline" className="text-sm font-semibold" />
-        </span>
-      ) : (
-        <Badge variant="secondary">{activityOpen ? "Answering…" : "Not submitted"}</Badge>
-      )}
-      {submitted && canOpen && <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />}
-    </>
+    </span>
   );
+  const status = submitted ? (
+    <span className="flex flex-wrap items-center justify-end gap-2">
+      {noCount > 0 ? (
+        <Badge variant="destructive">
+          <OctagonX /> STOP · {noCount} No
+        </Badge>
+      ) : (
+        <Badge className="bg-emerald-700 text-white">
+          <CheckCircle2 /> All clear
+        </Badge>
+      )}
+      <ScoreValue score={assessment.overallScore} layout="inline" className="text-sm font-semibold" />
+    </span>
+  ) : (
+    <Badge variant="secondary">{activityOpen ? "Answering…" : "Not submitted"}</Badge>
+  );
+
   return (
-    <li>
+    <li className="px-4 py-2">
       {submitted && canOpen ? (
         <Link
           href={`/assessments/${assessment.id}`}
-          className="flex min-h-14 items-center gap-3 px-4 py-2 hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring"
+          className="-mx-2 flex min-h-12 items-center gap-3 rounded-lg px-2 hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring"
         >
-          {body}
+          {person}
+          {status}
+          <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
         </Link>
       ) : (
-        <div className="flex min-h-14 items-center gap-3 px-4 py-2">{body}</div>
+        <div className="flex min-h-12 items-center gap-3">
+          {person}
+          {status}
+        </div>
+      )}
+      {verification ? (
+        <p className="flex items-center gap-1.5 pb-1 text-xs font-medium text-emerald-800">
+          <BadgeCheck className="size-4" aria-hidden /> Verified by {verification.verifiedByName} ·{" "}
+          {formatDateTime(verification.verifiedAt)}
+        </p>
+      ) : (
+        canVerify && (
+          <div className="flex justify-end pb-1">
+            <Button variant="outline" className="h-11" onClick={() => setConfirming(true)} disabled={verify.isPending}>
+              <BadgeCheck /> Verify
+            </Button>
+            <ConfirmDialog
+              open={confirming}
+              onOpenChange={setConfirming}
+              title={`Verify ${assessment.snapshot.userName}'s check?`}
+              description={
+                noCount > 0
+                  ? `${noCount} ${noCount === 1 ? "item was" : "items were"} answered No. Make sure ${noCount === 1 ? "it is" : "they are"} resolved before you verify. Your name and the time are recorded on ${activityReference}.`
+                  : `You confirm the controls on this check are in place. Your name and the time are recorded on ${activityReference}.`
+              }
+              confirmLabel="Verify"
+              onConfirm={() =>
+                verify.mutateAsync().catch((e) => {
+                  toast.error(errorMessage(e));
+                  throw e;
+                })
+              }
+            />
+          </div>
+        )
       )}
     </li>
   );
@@ -327,14 +380,16 @@ function CloseCard({ data }: { data: ActivityDetail }) {
   });
   const pending = data.joined - data.submitted;
   const stops = data.participants.filter((p) => p.noCount > 0).length;
+  const blocked = data.unverified > 0;
 
   return (
     <section aria-labelledby="close-heading" className="space-y-3 rounded-2xl border bg-card p-4">
       <h2 id="close-heading" className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-        Close this check
+        Verify &amp; close
       </h2>
       <p className="text-sm text-muted-foreground">
-        Closing stops anyone else joining or submitting. Who closed it and when is recorded.
+        As Start-Work Verifier, verify each submitted check, then close the job. Closing stops anyone else joining or
+        submitting; who closed it and when is recorded.
       </p>
       <label htmlFor="closureComment" className="block text-sm font-medium">
         Comment <span className="font-normal text-muted-foreground">(optional)</span>
@@ -348,9 +403,20 @@ function CloseCard({ data }: { data: ActivityDetail }) {
         placeholder="e.g. All checks in, toolbox talk done. Cleared to start."
         className="text-base"
       />
-      <Button variant="outline" className="h-11 w-full sm:w-auto" onClick={() => setConfirming(true)}>
-        <Lock /> Close check
+      <Button
+        variant="outline"
+        className="h-11 w-full sm:w-auto"
+        onClick={() => setConfirming(true)}
+        disabled={blocked}
+        aria-describedby={blocked ? "close-blocked" : undefined}
+      >
+        <Lock /> Verify &amp; close
       </Button>
+      {blocked && (
+        <p id="close-blocked" className="text-sm text-amber-800">
+          Verify the {data.unverified} submitted {data.unverified === 1 ? "check" : "checks"} above first.
+        </p>
+      )}
       <ConfirmDialog
         open={confirming}
         onOpenChange={setConfirming}

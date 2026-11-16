@@ -4,7 +4,7 @@ import { questions } from "@/lib/data";
 import type { QuestionCreateInput } from "@/lib/data";
 import { requireAdmin } from "@/lib/services/admin/shared";
 import type { Principal } from "@/lib/services/permissions";
-import { WEIGHT_MAX, WEIGHT_MIN } from "@/lib/services/questions";
+import { GUIDANCE_MAX_LENGTH, WEIGHT_MAX, WEIGHT_MIN } from "@/lib/services/questions";
 import type { AuditType, LookupItem, Module, Question } from "@/lib/types";
 
 // ---------- CSV ----------
@@ -72,7 +72,7 @@ export const REQUIRED_COLUMNS = [
   "vesselTypes",
   "auditTypes",
 ] as const;
-export const OPTIONAL_COLUMNS = ["criticalControl"] as const;
+export const OPTIONAL_COLUMNS = ["criticalControl", "guidance"] as const;
 export const ALL_COLUMNS = [...REQUIRED_COLUMNS, ...OPTIONAL_COLUMNS];
 type Column = (typeof ALL_COLUMNS)[number];
 
@@ -80,7 +80,7 @@ type Column = (typeof ALL_COLUMNS)[number];
 export function buildTemplateCsv(): string {
   return toCsv([
     [...ALL_COLUMNS],
-    ["Security", "I have checked the gangway watch is in place.", "Security", "1", "no", "", "", "no"],
+    ["Security", "I have checked the gangway watch is in place.", "Security", "1", "no", "", "", "no", ""],
     [
       "Navigation Watch",
       "I have confirmed the radar is set up for the current sea state.",
@@ -90,6 +90,7 @@ export function buildTemplateCsv(): string {
       "PSV;AHTS;Crew Boat",
       "MFE;Self Assessment",
       "yes",
+      "Radar gain and clutter suit the sea state\nGuard zones are set",
     ],
   ]);
 }
@@ -204,6 +205,8 @@ export function validateImport(table: string[][], context: ImportContext): Impor
     }
 
     const evidenceRequired = parseBoolean(cells.evidenceRequired, "evidenceRequired", errors);
+    const guidance = cells.guidance.trim();
+    if (guidance.length > GUIDANCE_MAX_LENGTH) errors.push(`guidance must be under ${GUIDANCE_MAX_LENGTH} characters`);
     const criticalControl = parseBoolean(cells.criticalControl, "criticalControl", errors);
     const vesselTypeIds = parseList(cells.vesselTypes, "vessel type", findVesselType, errors);
     const auditTypeIds = parseList(cells.auditTypes, "audit type", findAuditType, errors);
@@ -223,6 +226,7 @@ export function validateImport(table: string[][], context: ImportContext): Impor
             weight,
             criticalControl,
             evidenceRequired,
+            guidance,
             vesselTypeIds,
             auditTypeIds,
             active: true,

@@ -52,7 +52,12 @@ export function AssessmentSubmitted() {
                 <p className="font-mono text-lg font-semibold text-teal">{assessment.reference}</p>
                 {assessment.startWork && (
                   <div className="flex justify-center">
-                    <StartWorkDetailsLine details={assessment.startWork} activityId={assessment.activityId} />
+                    <StartWorkDetailsLine
+                      details={assessment.startWork}
+                      activityId={assessment.activityId}
+                      submitted
+                      verification={assessment.verification}
+                    />
                   </div>
                 )}
               </div>

@@ -54,7 +54,7 @@ describe("seeding", () => {
     reload();
 
     expect(await repo.vessels.list()).toHaveLength(41);
-    expect(await repo.modules.list()).toHaveLength(15);
+    expect(await repo.modules.list()).toHaveLength(27); // 10 Assurance + 17 Start Work
     expect(await repo.users.list()).toHaveLength(27);
     expect(await repo.users.list({ status: "DISABLED" })).toHaveLength(1);
     expect(await repo.users.list({ status: "PENDING" })).toHaveLength(3);

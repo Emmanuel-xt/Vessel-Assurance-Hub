@@ -1,11 +1,25 @@
-import { CheckCircle2, ClipboardList, MessageSquare, OctagonX, Users } from "lucide-react";
+import { BadgeCheck, CheckCircle2, ClipboardList, Clock, MessageSquare, OctagonX, Users } from "lucide-react";
+import { formatDateTime } from "@/lib/format";
 import { ActivityLink } from "@/components/start-work/activity-link";
-import type { ID, Question, Response, StartWorkDetails } from "@/lib/types";
+import type { AssessmentVerification, ID, Question, Response, StartWorkDetails } from "@/lib/types";
 
 export const teamLabel = (size: number) => `${size} ${size === 1 ? "person" : "people"}`;
 
-/** "Job: … · 4 people" line for Start Work Checks, plus a link to the auditor's check it belongs to. */
-export function StartWorkDetailsLine({ details, activityId }: { details: StartWorkDetails; activityId?: ID | null }) {
+/**
+ * "Job: … · 4 people" line for Start Work Checks, a link to the auditor's check it belongs to and, once submitted, the
+ * Start-Work Verifier sign-off (also printed: the paper sheet's verifier name and date).
+ */
+export function StartWorkDetailsLine({
+  details,
+  activityId,
+  submitted,
+  verification,
+}: {
+  details: StartWorkDetails;
+  activityId?: ID | null;
+  submitted?: boolean;
+  verification?: AssessmentVerification | null;
+}) {
   return (
     <>
       <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
@@ -18,6 +32,18 @@ export function StartWorkDetailsLine({ details, activityId }: { details: StartWo
         </span>
       </p>
       {activityId && <ActivityLink activityId={activityId} />}
+      {activityId &&
+        submitted &&
+        (verification ? (
+          <p className="flex items-center gap-1.5 text-sm font-medium text-emerald-800">
+            <BadgeCheck className="size-4 shrink-0" aria-hidden />
+            Start-Work Verifier: {verification.verifiedByName} · {formatDateTime(verification.verifiedAt)}
+          </p>
+        ) : (
+          <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+            <Clock className="size-4 shrink-0" aria-hidden /> Waiting for the Start-Work Verifier
+          </p>
+        ))}
     </>
   );
 }

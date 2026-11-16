@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { ValidationError } from "@/lib/services/errors";
-import { WEIGHT_MAX, WEIGHT_MIN, saveQuestion, type QuestionFormValues } from "@/lib/services/questions";
+import { GUIDANCE_MAX_LENGTH, WEIGHT_MAX, WEIGHT_MIN, saveQuestion, type QuestionFormValues } from "@/lib/services/questions";
 import type { AuditType, LookupItem, Module, Question } from "@/lib/types";
 import type { FieldErrors } from "@/lib/validation/common";
 import { useAdminAction } from "./use-admin-action";
@@ -59,6 +59,7 @@ function QuestionForm({
     weight: question?.weight ?? 1,
     criticalControl: question?.criticalControl ?? false,
     evidenceRequired: question?.evidenceRequired ?? false,
+    guidance: question?.guidance ?? "",
     vesselTypeIds: question?.vesselTypeIds ?? [],
     auditTypeIds: question?.auditTypeIds ?? [],
     active: question?.active ?? true,
@@ -127,6 +128,21 @@ function QuestionForm({
             rows={3}
             value={values.text}
             onChange={(e) => patch({ text: e.target.value })}
+          />
+        </FormField>
+
+        <FormField
+          id="guidance"
+          label="How to check (optional)"
+          error={errors.guidance}
+          hint='Shown behind "How to check" under the question. One point per line; start a line with "- " for a sub-point or "Note:" for a note.'
+        >
+          <Textarea
+            {...fieldA11y("guidance", errors.guidance)}
+            rows={4}
+            maxLength={GUIDANCE_MAX_LENGTH}
+            value={values.guidance}
+            onChange={(e) => patch({ guidance: e.target.value })}
           />
         </FormField>
 

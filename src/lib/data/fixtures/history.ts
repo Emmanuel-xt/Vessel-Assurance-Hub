@@ -99,16 +99,34 @@ const CREWS: Record<string, string[]> = {
 
 /** Answered No far more often than the rest. */
 const PROBLEM_QUESTIONS = new Set([
-  "q-hot-work-06", // gas testing
-  "q-marine-start-work-08", // permit to work
-  "q-marine-start-work-10", // toolbox talk
+  "q-hot-work-03", // gas test
+  "q-deck-work-03", // permit to work
+  "q-deck-work-06", // hazards and controls understood
   "q-galley-02", // food storage temperatures
   "q-occupational-health-03", // fatigue / work-rest hours
   "q-emergency-preparedness-03", // drills current
   "q-learning-action-closure-02", // previous actions closed with evidence
   "q-cargo-operations-06", // lifting equipment certified
-  "q-working-at-height-07", // harness inspection
+  "q-working-at-height-02", // fall protection equipment
+  "q-mechanical-lifting-05", // rigging certified and rated
 ]);
+
+/** How often each Start Work task comes up in the demo: marine work most, onshore-type tasks never. */
+const START_WORK_MIX: [moduleId: string, weight: number][] = [
+  ["mod-deck-work", 5],
+  ["mod-mechanical-lifting", 4],
+  ["mod-bunkering", 3],
+  ["mod-personnel-transfer", 3],
+  ["mod-hot-work", 3],
+  ["mod-working-at-height", 3],
+  ["mod-energy-isolation", 2],
+  ["mod-confined-space-entry", 2],
+  ["mod-de-isolation", 1],
+  ["mod-energised-electrical", 1],
+  ["mod-man-riding", 1],
+  ["mod-work-near-water", 1],
+  ["mod-mobile-equipment", 1],
+];
 
 /** Base answer rates for an average check; multiplied by the vessel/audit "risk factor" below. */
 const RATES = { no: 0.0135, problemNo: 0.055, concern: 0.15, startWorkNo: 0.55 } as const;
@@ -183,7 +201,7 @@ export function generateHistory(options: HistoryOptions = {}): DemoHistory {
   const namedLocations = NAMED_LOCATION_IDS;
   const actionOwners = [...supervisors, ...auditors];
   const assuranceModules = MODULES.filter((m) => m.active && m.category === "ASSURANCE");
-  const startWorkModules = MODULES.filter((m) => m.active && m.category === "START_WORK");
+  const startWorkMix = START_WORK_MIX.filter(([moduleId]) => MODULES.some((m) => m.id === moduleId && m.active));
 
   const applicable = (moduleId: ID, vessel: Vessel, auditTypeId: ID): Question[] =>
     QUESTIONS.filter(
@@ -239,6 +257,20 @@ export function generateHistory(options: HistoryOptions = {}): DemoHistory {
     ...OPEN_TODAY.map((open) => ({ ms: todayMs - open.minutesAgo * 60_000, open })).sort((a, b) => a.ms - b.ms),
   ];
 
+  /**
+   * Start-Work Verifier sign-off: on a closed check the auditor verified everyone before closing; on a check still open
+   * today, only the first person has been verified, so both states show in the demo.
+   */
+  const verificationFor = (activity: StartWorkActivity | null, slotIndex: number, submittedMs: number) => {
+    if (!activity) return null;
+    const by = { verifiedById: activity.createdById, verifiedByName: activity.snapshot.createdByName };
+    if (activity.closedAt) {
+      const closedMs = Date.parse(activity.closedAt);
+      return { ...by, verifiedAt: iso(Math.max(submittedMs + 60_000, closedMs - (slotIndex + 1) * 3 * 60_000)) };
+    }
+    return slotIndex === 0 ? { ...by, verifiedAt: iso(submittedMs + 5 * 60_000) } : null;
+  };
+
   for (const [index, { ms: momentMs, open }] of events.entries()) {
     rng = random;
     const progress = Math.min(1, 1 - (lagosMidnight - momentMs) / (days * DAY)); // 0 = oldest, 1 = now
@@ -282,7 +314,7 @@ export function generateHistory(options: HistoryOptions = {}): DemoHistory {
 
     let moduleIds: ID[];
     if (kind === "FULL_VESSEL") moduleIds = assuranceModules.map((m) => m.id);
-    else if (kind === "START_WORK") moduleIds = [open ? open.moduleId : pick(startWorkModules).id];
+    else if (kind === "START_WORK") moduleIds = [open ? open.moduleId : weighted(startWorkMix)];
     else {
       const usable = modulesVisibleTo(user.role, assuranceModules).filter(
         (m) => applicable(m.id, vessel, type.id).length > 0,
@@ -432,6 +464,7 @@ export function generateHistory(options: HistoryOptions = {}): DemoHistory {
         auditTypeId: type.id,
         startWork: activity ? { taskDescription: activity.taskDescription, teamSize: activity.teamSize } : null,
         activityId: activity?.id ?? null,
+        verification: verificationFor(activity, slotIndex, submittedMs),
         status: "SUBMITTED",
         overallScore: scores.overall,
         moduleScores: scores.byModule,

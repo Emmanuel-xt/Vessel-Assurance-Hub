@@ -46,6 +46,7 @@ const assessmentsCrud = crud<"assessments", AssessmentCreateInput, AssessmentFil
       ...input,
       startWork: input.startWork ? { ...input.startWork } : null,
       activityId: input.activityId ?? null,
+      verification: null,
       id: newId(),
       reference: nextAssessmentReference(),
       status: "DRAFT",
@@ -111,6 +112,20 @@ export const assessments: AssessmentsRepository = {
     assessment.moduleScores = { ...scores.moduleScores };
     assessment.submittedAt = now;
     assessment.updatedAt = now;
+    persist();
+    return clone(assessment);
+  },
+
+  async verify(id, verifier) {
+    await simulateLatency();
+    const assessment = requireRow("assessments", id, "Assessment");
+    if (assessment.status !== "SUBMITTED") {
+      throw new RepositoryError("CONFLICT", `${assessment.reference} has not been submitted yet`);
+    }
+    if (assessment.verification) {
+      throw new RepositoryError("CONFLICT", `${assessment.reference} is already verified`);
+    }
+    assessment.verification = { ...verifier, verifiedAt: nowIso() };
     persist();
     return clone(assessment);
   },

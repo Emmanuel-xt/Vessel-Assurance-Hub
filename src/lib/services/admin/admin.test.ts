@@ -163,7 +163,7 @@ describe("modules", () => {
       category: "START_WORK",
       active: true,
     });
-    expect(created.displayOrder).toBe(16);
+    expect(created.displayOrder).toBe(28);
   });
 
   it("stores who sees an Assurance module, and clears it for Start Work modules", async () => {
@@ -180,9 +180,9 @@ describe("modules", () => {
   });
 
   it("reorders modules", async () => {
-    await moveModule(admin, "mod-bridge-team", "up");
+    await moveModule(admin, "mod-navigation-watch", "up");
     const order = (await repo.modules.list()).map((m) => m.id);
-    expect(order.slice(0, 2)).toEqual(["mod-bridge-team", "mod-marine-start-work"]);
+    expect(order.slice(0, 2)).toEqual(["mod-navigation-watch", "mod-bridge-team"]);
   });
 
   it("rejects a duplicate module name", async () => {

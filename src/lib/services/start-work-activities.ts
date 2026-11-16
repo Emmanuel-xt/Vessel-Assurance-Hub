@@ -1,6 +1,7 @@
 // Start Work Check activities (CLAUDE.md §15, Roles pass). An Auditor (or Admin) sets up a check for one job with the
 // number of people taking part. Each person joins it (join code, open-checks list, or link / QR) and answers their own
-// Start Work Check (an Assessment with `activityId`). The Auditor closes it when the job is cleared.
+// Start Work Check (an Assessment with `activityId`). As Start-Work Verifier the Auditor signs off each submitted
+// check, then closes the activity (the job sign-off).
 //
 // MOCK: these rules run in the browser. Production: behind API routes, and joining (place count + create) runs in one
 // transaction so two people cannot take the last place at the same time.
@@ -87,6 +88,8 @@ export interface ActivityParticipant {
   noCount: number;
   /** Whether the viewer may open this person's check. */
   canOpen: boolean;
+  /** Whether the viewer (the activity's Auditor or an Admin) can sign this check off now. */
+  canVerify: boolean;
 }
 
 export interface ActivitySummary {
@@ -164,6 +167,8 @@ export async function countOpenActivities(actor: Principal): Promise<number> {
 
 export interface ActivityDetail extends ActivitySummary {
   participants: ActivityParticipant[];
+  /** Submitted checks still waiting for the verifier's sign-off (closing is blocked until this is 0). */
+  unverified: number;
   createdByName: string;
   closedByName: string | null;
   canClose: boolean;
@@ -187,12 +192,18 @@ export async function loadActivity(actor: Principal, id: ID): Promise<ActivityDe
           assessment.status === "SUBMITTED"
             ? (await responses.listByAssessment(assessment.id)).filter((r) => r.answer === "NO").length
             : 0;
-        return { assessment, noCount, canOpen: canViewAssessment(user, assessment) };
+        return {
+          assessment,
+          noCount,
+          canOpen: canViewAssessment(user, assessment),
+          canVerify: canCloseActivity(user, activity) && assessment.status === "SUBMITTED" && !assessment.verification,
+        };
       }),
   );
   return {
     ...summary,
     participants,
+    unverified: unverifiedCount(checks),
     createdByName: activity.snapshot.createdByName,
     closedByName: closedBy?.name ?? null,
     canClose: canCloseActivity(user, activity),
@@ -259,7 +270,33 @@ export async function joinActivity(actor: Principal, id: ID): Promise<Assessment
   });
 }
 
-// ---------- Closing (the activity's Auditor / Admin) ----------
+// ---------- Verifying and closing (the activity's Auditor / Admin) ----------
+
+const unverifiedCount = (checks: Assessment[]) =>
+  checks.filter((a) => a.status === "SUBMITTED" && !a.verification).length;
+
+/**
+ * The Start-Work Verifier signs off one person's submitted check (the paper sheet's verifier initials): records who
+ * and when. Only the activity's Auditor or an Admin, while the activity is open, once per check.
+ */
+export async function verifyParticipant(actor: Principal, assessmentId: ID): Promise<Assessment> {
+  const user = requireUser(actor);
+  const check = await assessments.get(assessmentId);
+  const activity = check?.activityId ? await startWorkActivities.get(check.activityId) : null;
+  if (!check || !activity) throw new RepositoryError("NOT_FOUND", "This Start Work Check doesn't exist.");
+  if (activity.status === "CLOSED") throw new RepositoryError("CONFLICT", `${activity.reference} is already closed.`);
+  if (!canCloseActivity(user, activity)) {
+    throw new PermissionError("FORBIDDEN", "Only the auditor who set up this Start Work Check (or an admin) can verify it.");
+  }
+  if (check.status !== "SUBMITTED") {
+    throw new RepositoryError("CONFLICT", `${check.snapshot.userName} has not submitted their check yet.`);
+  }
+  if (check.verification) throw new RepositoryError("CONFLICT", `${check.reference} is already verified.`);
+  const verifier = await users.get(user.id);
+  return assessments.verify(check.id, { verifiedById: user.id, verifiedByName: verifier?.name ?? "" });
+}
+
+// ---------- Closing ----------
 
 /**
  * Closes the check: no more joining or submitting. Participants who had not submitted keep their draft (shown as
@@ -272,6 +309,13 @@ export async function closeActivity(actor: Principal, id: ID, comment = ""): Pro
   if (activity.status === "CLOSED") throw new RepositoryError("CONFLICT", `${activity.reference} is already closed.`);
   if (!canCloseActivity(user, activity)) {
     throw new PermissionError("FORBIDDEN", "Only the auditor who set up this Start Work Check (or an admin) can close it.");
+  }
+  const waiting = unverifiedCount(await assessments.list({ activityId: id }));
+  if (waiting > 0) {
+    throw new RepositoryError(
+      "CONFLICT",
+      `Verify the ${waiting} submitted ${waiting === 1 ? "check" : "checks"} first, then close.`,
+    );
   }
   const note = comment.trim();
   if (note.length > CLOSURE_COMMENT_MAX_LENGTH) {
