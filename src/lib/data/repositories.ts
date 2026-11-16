@@ -21,6 +21,8 @@ import type {
   PublicUser,
   Question,
   Response,
+  StartWorkActivity,
+  StartWorkActivityStatus,
   RiskLevel,
   Role,
   User,
@@ -149,6 +151,8 @@ export interface AssessmentFilter {
   userId?: ID;
   status?: AssessmentStatus;
   vesselId?: ID;
+  /** The participants' checks of one Start Work Check activity. */
+  activityId?: ID;
 }
 
 export interface SubmittedAssessmentFilter {
@@ -173,6 +177,8 @@ export type AssessmentCreateInput = Pick<
 > & {
   /** Start Work Checks only; defaults to null. */
   startWork?: Assessment["startWork"];
+  /** Start Work Checks only: the activity joined; defaults to null. */
+  activityId?: Assessment["activityId"];
 };
 
 export type AssessmentScoresInput = Pick<Assessment, "overallScore" | "moduleScores">;
@@ -190,6 +196,30 @@ export interface AssessmentsRepository
   submit(id: ID, scores: AssessmentScoresInput): Promise<Assessment>;
   /** Deletes a draft and its responses. Rejects with CONFLICT for submitted assessments. */
   removeDraft(id: ID): Promise<void>;
+}
+
+// ---------- Start Work Check activities ----------
+
+export interface StartWorkActivityFilter {
+  status?: StartWorkActivityStatus;
+  createdById?: ID;
+  vesselId?: ID;
+}
+
+/** The data layer assigns the reference (VAH-S-…) and the join code. */
+export type StartWorkActivityCreateInput = Pick<
+  StartWorkActivity,
+  "moduleId" | "vesselId" | "locationId" | "taskDescription" | "teamSize" | "createdById"
+>;
+
+export type StartWorkActivityPatch = Partial<
+  Pick<StartWorkActivity, "status" | "closedById" | "closedAt" | "closureComment">
+>;
+
+export interface StartWorkActivitiesRepository
+  extends CrudRepository<StartWorkActivity, StartWorkActivityCreateInput, StartWorkActivityFilter, StartWorkActivityPatch> {
+  /** Finds an activity by its join code (case-insensitive, spaces and dashes ignored). Null when unknown. */
+  findByCode(code: string): Promise<StartWorkActivity | null>;
 }
 
 export type ResponseCreateInput = Pick<
@@ -335,7 +365,7 @@ export interface PhotosRepository {
 
 export type SignUpInput = Pick<User, "name" | "email" | "password" | "company" | "position"> & {
   /** Self-signup can only request these roles; admins grant ADMIN. */
-  requestedRole: Extract<Role, "WORKER" | "SUPERVISOR">;
+  requestedRole: Exclude<Role, "ADMIN">;
 };
 
 export interface AuthRepository {
@@ -376,6 +406,7 @@ export interface Repositories {
   questions: QuestionsRepository;
   assessments: AssessmentsRepository;
   responses: ResponsesRepository;
+  startWorkActivities: StartWorkActivitiesRepository;
   findings: FindingsRepository;
   actions: ActionsRepository;
   findingActivities: FindingActivitiesRepository;

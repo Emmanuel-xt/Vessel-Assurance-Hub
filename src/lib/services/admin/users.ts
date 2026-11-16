@@ -1,5 +1,6 @@
 // Admin user management: approve, reject, disable / re-enable, change role.
 
+import { ROLE_LABELS } from "@/lib/constants";
 import { users, type UserFilter } from "@/lib/data";
 import { ValidationError } from "@/lib/services/errors";
 import { PermissionError, canChangeUserRole, canChangeUserStatus, type Principal } from "@/lib/services/permissions";
@@ -53,7 +54,7 @@ export const disableUser = (actor: Principal, userId: ID) => changeStatus(actor,
 /** DISABLED → ACTIVE */
 export const reEnableUser = (actor: Principal, userId: ID) => changeStatus(actor, userId, "ACTIVE", "DISABLED");
 
-const ROLES: readonly Role[] = ["WORKER", "SUPERVISOR", "ADMIN"];
+const ROLES = Object.keys(ROLE_LABELS) as Role[];
 
 export async function changeUserRole(actor: Principal, userId: ID, role: Role): Promise<PublicUser> {
   requireAdmin(actor);

@@ -54,11 +54,11 @@ describe("seeding", () => {
     reload();
 
     expect(await repo.vessels.list()).toHaveLength(41);
-    expect(await repo.modules.list()).toHaveLength(17);
-    expect(await repo.users.list()).toHaveLength(25);
+    expect(await repo.modules.list()).toHaveLength(15);
+    expect(await repo.users.list()).toHaveLength(27);
     expect(await repo.users.list({ status: "DISABLED" })).toHaveLength(1);
     expect(await repo.users.list({ status: "PENDING" })).toHaveLength(3);
-    expect(await repo.locations.list()).toHaveLength(4);
+    expect(await repo.locations.list()).toHaveLength(5);
     expect(localStorage.getItem(STORAGE_KEY)).not.toBeNull();
   });
 
@@ -159,7 +159,7 @@ describe("reset", () => {
       vesselTypeId: "vt-psv",
       packageId: "pkg-epc1",
       contractor: null,
-      defaultLocationId: "loc-bonny",
+      defaultLocationId: "loc-marconi",
     });
     await repo.modules.update("mod-galley", { active: false });
     await submittedAssessment();
@@ -179,7 +179,7 @@ describe("reset", () => {
     await repo.locations.create({ name: "Temporary" });
     await repo.demo.reset();
     reload();
-    expect(await repo.locations.list()).toHaveLength(4);
+    expect(await repo.locations.list()).toHaveLength(5);
   });
 });
 
@@ -208,8 +208,9 @@ describe("question applicability", () => {
   });
 
   it("filters audit types by role", async () => {
-    expect((await repo.auditTypes.listForRole("WORKER")).map((t) => t.code)).toEqual(["SELF_ASSESSMENT", "START_WORK_CHECK"]);
-    expect(await repo.auditTypes.listForRole("SUPERVISOR")).toHaveLength(5);
+    expect((await repo.auditTypes.listForRole("WORKER")).map((t) => t.code)).toEqual(["PRE_MOB", "LOD1", "START_WORK_CHECK"]);
+    expect(await repo.auditTypes.listForRole("SUPERVISOR")).toHaveLength(3);
+    expect(await repo.auditTypes.listForRole("ADMIN")).toHaveLength(5);
   });
 });
 
@@ -397,7 +398,7 @@ describe("photos", () => {
   });
 
   it("serves the demo history's placeholder photos without storing them", async () => {
-    const id = "demo-photo-mod-bunkering-007";
+    const id = "demo-photo-mod-galley-007";
     const meta = await repo.photos.getMeta(id);
     expect(meta).toMatchObject({ id, mimeType: "image/svg+xml", width: 320, height: 240 });
     expect(meta!.size).toBeLessThan(2_000);

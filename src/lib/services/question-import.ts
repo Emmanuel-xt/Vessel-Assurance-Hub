@@ -88,7 +88,7 @@ export function buildTemplateCsv(): string {
       "2",
       "yes",
       "PSV;AHTS;Crew Boat",
-      "MFE;Spot Check",
+      "MFE;Self Assessment",
       "yes",
     ],
   ]);

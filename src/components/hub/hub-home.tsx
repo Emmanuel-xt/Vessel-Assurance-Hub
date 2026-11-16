@@ -11,10 +11,18 @@ import { questions } from "@/lib/data";
 import { useRepoQuery } from "@/lib/data/hooks";
 import { listMyOpenActions, modulesFor } from "@/lib/services/assessments";
 import { EmptyState } from "@/components/admin/page-header";
-import { canAccessAdmin, canViewDashboard } from "@/lib/services/permissions";
+import {
+  canAccessAdmin,
+  canInitiateStartWork,
+  canStartFullVessel,
+  canViewDashboard,
+  modulesVisibleTo,
+} from "@/lib/services/permissions";
+import { countOpenActivities } from "@/lib/services/start-work-activities";
+import type { Role } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-async function loadTiles() {
+async function loadTiles(role: Role) {
   const [assurance, startWork, activeQuestions] = await Promise.all([
     modulesFor("MODULE"),
     modulesFor("START_WORK"),
@@ -22,7 +30,10 @@ async function loadTiles() {
   ]);
   const questionCount = (moduleId: string) => activeQuestions.filter((q) => q.moduleId === moduleId).length;
   return {
-    modules: assurance.map((m) => ({ ...m, questionCount: questionCount(m.id) })),
+    /** The LOD 1 Self Assessment list: only the modules this role sees. */
+    modules: modulesVisibleTo(role, assurance).map((m) => ({ ...m, questionCount: questionCount(m.id) })),
+    /** Full Vessel Assurance covers every active Assurance module, whoever runs it. */
+    fullVesselCount: assurance.length,
     startWorkCount: startWork.length,
   };
 }
@@ -31,7 +42,11 @@ const TILE = "flex rounded-2xl border p-4 transition-colors active:scale-[0.99] 
 
 export function HubHome() {
   const user = useCurrentUser();
-  const tiles = useRepoQuery(["modules", "hub"], loadTiles);
+  const tiles = useRepoQuery(["modules", "hub", user.role], () => loadTiles(user.role));
+  const fullVessel = canStartFullVessel(user);
+  const initiator = canInitiateStartWork(user);
+  const openChecks = useRepoQuery(["startWorkActivities", "open-count"], () => countOpenActivities(user));
+  const openCount = openChecks.data ?? 0;
   const openActions = useRepoQuery(["actions", "mine", "open", user.id], () => listMyOpenActions(user));
 
   return (
@@ -39,7 +54,7 @@ export function HubHome() {
       <HubWelcome />
 
       <QueryState query={tiles} skeletonRows={4}>
-        {({ modules, startWorkCount }) =>
+        {({ modules, fullVesselCount, startWorkCount }) =>
           modules.length === 0 && startWorkCount === 0 ? (
             <EmptyState icon={Ship} title="No modules are available yet">
               {canAccessAdmin(user)
@@ -51,22 +66,29 @@ export function HubHome() {
             <section aria-label="Start an assessment" className="grid gap-3 sm:grid-cols-2">
               {startWorkCount > 0 && (
                 <Link
-                  href="/assess/new?module=start-work"
+                  href="/start-work"
                   className={cn(TILE, "min-h-32 items-center gap-4 border-teal bg-teal text-teal-foreground shadow-md hover:bg-teal/90")}
                 >
                   <span className="flex size-14 shrink-0 items-center justify-center rounded-xl bg-white/20">
                     <HardHat className="size-8" aria-hidden />
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block text-lg font-semibold">Start Work Check</span>
+                    <span className="flex flex-wrap items-center gap-2 text-lg font-semibold">
+                      {initiator ? "Start Work Check" : "Join a Start Work Check"}
+                      {openCount > 0 && (
+                        <Badge className="bg-white/20 text-teal-foreground">{openCount} open</Badge>
+                      )}
+                    </span>
                     <span className="block text-sm text-teal-foreground/90">
-                      Before the job: competence, permits, equipment, SIMOPS.
+                      {initiator
+                        ? "Set one up for a job, share the code, close it when the crew is cleared."
+                        : "Enter the code from your auditor, or pick an open check."}
                     </span>
                   </span>
                   <ChevronRight className="size-5 shrink-0" aria-hidden />
                 </Link>
               )}
-              {modules.length > 0 && (
+              {fullVessel && fullVesselCount > 0 && (
                 <Link
                   href="/assess/new?module=full-vessel"
                   className={cn(TILE, "min-h-32 items-center gap-4 border-navy bg-navy text-navy-foreground shadow-md hover:bg-navy/90")}
@@ -77,7 +99,7 @@ export function HubHome() {
                   <span className="min-w-0 flex-1">
                     <span className="block text-lg font-semibold">Full Vessel Assurance</span>
                     <span className="block text-sm text-navy-foreground/80">
-                      All {modules.length} assurance modules for one vessel.
+                      All {fullVesselCount} assurance modules for one vessel.
                     </span>
                   </span>
                   <ChevronRight className="size-5 shrink-0" aria-hidden />
@@ -88,7 +110,7 @@ export function HubHome() {
             {modules.length > 0 && (
             <section aria-labelledby="modules-heading" className="space-y-3">
               <h2 id="modules-heading" className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                Assess one module
+                LOD 1 Self Assessment Module
               </h2>
               <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
                 {modules.map((module) => (

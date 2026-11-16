@@ -45,8 +45,9 @@ function assessment(o: Partial<Assessment> & { day: string; score: number | null
     userId: "usr-wkr-blessing",
     vesselId: "ves-fds",
     locationId: "loc-bonga",
-    auditTypeId: "at-self-assessment",
+    auditTypeId: "at-lod1",
     startWork: null,
+    activityId: null,
     status: "SUBMITTED",
     overallScore: score,
     moduleScores: { [rest.moduleIds?.[0] ?? "mod-security"]: score },
@@ -204,14 +205,14 @@ describe("filter in the URL", () => {
   });
 
   it("links to the matching All assessments list", () => {
-    const link = assessmentsLink({ preset: "thisMonth", scope: "self", locationId: "loc-ea" }, { from: "2026-11-01", to: "2026-11-05" }, { vesselId: "ves-fds", questionId: "q-galley-02" });
+    const link = assessmentsLink({ preset: "thisMonth", scope: "self", locationId: "loc-onne" }, { from: "2026-11-01", to: "2026-11-05" }, { vesselId: "ves-fds", questionId: "q-galley-02" });
     const params = new URL(link, "http://x").searchParams;
     expect(Object.fromEntries(params)).toEqual({
       view: "all",
       from: "2026-11-01",
       to: "2026-11-05",
       vessel: "ves-fds",
-      location: "loc-ea",
+      location: "loc-onne",
       scope: "self",
       question: "q-galley-02",
     });
@@ -220,7 +221,7 @@ describe("filter in the URL", () => {
 
 describe("filterAssessments", () => {
   const a = assessment({ day: "2026-10-10", score: 90 });
-  const b = assessment({ day: "2026-10-12", score: 70, auditTypeId: "at-mfe", vesselId: "ves-bl216", locationId: "loc-ea" });
+  const b = assessment({ day: "2026-10-12", score: 70, auditTypeId: "at-mfe", vesselId: "ves-bl216", locationId: "loc-onne" });
   const c = assessment({ day: "2026-10-14", score: 80, kind: "FULL_VESSEL", moduleIds: ["mod-security", "mod-galley"], snapshot: { ...a.snapshot, packageId: "pkg-epc1" } });
   const late = assessment({ day: "2026-10-31", score: 60, submittedAt: "2026-10-31T23:30:00.000Z" }); // 1 Nov in Lagos
   const data = dataWith({ assessments: [a, b, c, late] });
@@ -233,7 +234,7 @@ describe("filterAssessments", () => {
     expect(ids(filterAssessments(data, { ...ALL, scope: "self" }, october))).toEqual([a.id, c.id]);
     expect(ids(filterAssessments(data, { ...ALL, moduleId: "mod-galley" }, october))).toEqual([c.id]);
     expect(ids(filterAssessments(data, { ...ALL, packageId: "pkg-epc1" }, october))).toEqual([c.id]);
-    expect(ids(filterAssessments(data, { ...ALL, vesselId: "ves-bl216", locationId: "loc-ea" }, october))).toEqual([b.id]);
+    expect(ids(filterAssessments(data, { ...ALL, vesselId: "ves-bl216", locationId: "loc-onne" }, october))).toEqual([b.id]);
   });
 });
 
@@ -281,7 +282,7 @@ describe("scores", () => {
       assessment({ day: "2026-10-01", score: 96, vesselId: "ves-topaz-master" }),
       assessment({ day: "2026-10-02", score: 60, vesselId: "ves-topaz-master", auditTypeId: "at-mfe" }),
       assessment({ day: "2026-10-03", score: 90, vesselId: "ves-fds" }),
-      assessment({ day: "2026-10-04", score: 85, vesselId: "ves-fds", auditTypeId: "at-spot-check" }),
+      assessment({ day: "2026-10-04", score: 85, vesselId: "ves-fds", auditTypeId: "at-mfe" }),
       assessment({ day: "2026-10-05", score: 90, vesselId: "ves-a60" }), // self only: left out
     ];
     const rows = selfVsSupervisory(dataWith({ assessments: list }), list);
@@ -367,7 +368,8 @@ describe("computeDashboard on the demo history", () => {
 
   it("produces every view for the default filter", () => {
     const view = computeDashboard(data, { preset: "thisYear", scope: "all" }, NOW);
-    expect(view.kpis.submitted).toBe(300);
+    expect(view.kpis.submitted).toBe(data.assessments.length);
+    expect(view.kpis.submitted).toBeGreaterThan(280);
     expect(view.kpis.fleetScore).toBeGreaterThan(70);
     expect(view.bucket).toBe("month");
     expect(view.trend.length).toBe(11);

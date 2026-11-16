@@ -3,14 +3,17 @@
 import { useState } from "react";
 import { FormField, INPUT_CLASS, fieldA11y } from "@/components/forms/form-field";
 import { NativeSelect } from "@/components/forms/native-select";
+import { ToggleChips } from "@/components/forms/toggle-chips";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
+import { ROLE_LABELS } from "@/lib/constants";
 import { saveModule, type ModuleFormValues } from "@/lib/services/admin/modules";
 import { ValidationError } from "@/lib/services/errors";
+import { MODULE_AUDIENCE_ROLES } from "@/lib/services/permissions";
 import type { Module } from "@/lib/types";
 import type { FieldErrors } from "@/lib/validation/common";
 import { useAdminAction } from "./use-admin-action";
@@ -22,6 +25,9 @@ interface ModuleFormSheetProps {
 }
 
 export const CATEGORY_LABELS = { START_WORK: "Start Work", ASSURANCE: "Assurance" } as const;
+
+const AUDIENCE_OPTIONS = MODULE_AUDIENCE_ROLES.map((role) => ({ value: role, label: ROLE_LABELS[role] }));
+type AudienceRole = (typeof MODULE_AUDIENCE_ROLES)[number];
 
 export function ModuleFormSheet(props: ModuleFormSheetProps) {
   return (
@@ -38,6 +44,7 @@ function ModuleForm({ module, onOpenChange }: ModuleFormSheetProps) {
     name: module?.name ?? "",
     description: module?.description ?? "",
     category: module?.category ?? "ASSURANCE",
+    roles: (module?.roles ?? []).filter((r): r is AudienceRole => r !== "ADMIN"),
     active: module?.active ?? true,
   });
   const [errors, setErrors] = useState<FieldErrors<ModuleFormValues>>({});
@@ -100,6 +107,24 @@ function ModuleForm({ module, onOpenChange }: ModuleFormSheetProps) {
             <option value="START_WORK">{CATEGORY_LABELS.START_WORK}</option>
           </NativeSelect>
         </FormField>
+
+        {values.category === "ASSURANCE" && (
+          <FormField
+            id="roles"
+            label="Shown to"
+            error={errors.roles}
+            hint="Who sees it on the LOD 1 Self Assessment list. None selected = everyone. Admins always see it."
+          >
+            <ToggleChips
+              id="roles"
+              options={AUDIENCE_OPTIONS}
+              selected={values.roles ?? []}
+              onChange={(roles) => setValues({ ...values, roles: roles as AudienceRole[] })}
+              emptyLabel="Everyone"
+              invalid={!!errors.roles}
+            />
+          </FormField>
+        )}
 
         <div className="flex items-center gap-3">
           <Checkbox

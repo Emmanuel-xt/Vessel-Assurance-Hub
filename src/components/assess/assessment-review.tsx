@@ -117,7 +117,7 @@ function Review({ form }: { form: AssessmentForm }) {
         <p className="font-mono text-xs font-semibold text-teal">{assessment.reference}</p>
         <h1 className="text-2xl font-semibold tracking-tight">Review {title}</h1>
         <p className="text-sm text-muted-foreground">{assessment.snapshot.vesselName}</p>
-        {assessment.startWork && <StartWorkDetailsLine details={assessment.startWork} />}
+        {assessment.startWork && <StartWorkDetailsLine details={assessment.startWork} activityId={assessment.activityId} />}
       </header>
 
       {findings.errorBanner}

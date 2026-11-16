@@ -61,14 +61,14 @@ describe("validateImport", () => {
       evidenceRequired: true,
       criticalControl: true,
       vesselTypeIds: ["vt-psv", "vt-ahts", "vt-crew-boat"],
-      auditTypeIds: ["at-mfe", "at-spot-check"],
+      auditTypeIds: ["at-mfe", "at-self-assessment"],
     });
   });
 
   it("matches names ignoring case, in any column order, with defaults for blanks", async () => {
     const result = await preview(
       "Text,MODULE,riskcategory,auditTypes,vesselTypes,evidenceRequired,weight\n" +
-        "I have checked the CCTV covers the gangway.,security,SECURITY,spot_check,psv,,\n",
+        "I have checked the CCTV covers the gangway.,security,SECURITY,pre_mob,psv,,\n",
     );
     expect(result.validCount).toBe(1);
     expect(result.rows[0].input).toMatchObject({
@@ -78,7 +78,7 @@ describe("validateImport", () => {
       evidenceRequired: false,
       criticalControl: false,
       vesselTypeIds: ["vt-psv"],
-      auditTypeIds: ["at-spot-check"],
+      auditTypeIds: ["at-pre-mob"],
     });
   });
 

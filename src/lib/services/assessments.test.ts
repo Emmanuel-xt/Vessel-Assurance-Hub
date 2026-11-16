@@ -17,14 +17,16 @@ const YEAR = referenceYear(new Date());
 const worker: Principal = { id: "usr-wkr-blessing", role: "WORKER", status: "ACTIVE" };
 const otherWorker: Principal = { id: "usr-wkr-emeka", role: "WORKER", status: "ACTIVE" };
 const supervisor: Principal = { id: "usr-sup-tunde", role: "SUPERVISOR", status: "ACTIVE" };
+const auditor: Principal = { id: "usr-aud-kemi", role: "AUDITOR", status: "ACTIVE" };
+const visitor: Principal = { id: "usr-vis-segun", role: "VISITOR", status: "ACTIVE" };
 const admin: Principal = { id: "usr-admin", role: "ADMIN", status: "ACTIVE" };
 
 const setup = (overrides: Partial<AssessmentSetupValues> = {}): AssessmentSetupValues => ({
   kind: "MODULE",
   moduleId: "mod-security",
   vesselId: "ves-lady-perpetual",
-  locationId: "loc-bonny",
-  auditTypeId: "at-self-assessment",
+  locationId: "loc-marconi",
+  auditTypeId: "at-lod1",
   ...overrides,
 });
 
@@ -41,9 +43,12 @@ describe("allowedAuditTypesFor", () => {
     const codes = (role: Principal["role"], kind: "MODULE" | "START_WORK") =>
       allowedAuditTypesFor(role, kind, types).map((t) => t.code);
 
-    expect(codes("WORKER", "MODULE")).toEqual(["SELF_ASSESSMENT"]);
+    expect(codes("WORKER", "MODULE")).toEqual(["PRE_MOB", "LOD1"]);
     expect(codes("WORKER", "START_WORK")).toEqual(["START_WORK_CHECK"]);
-    expect(codes("SUPERVISOR", "MODULE")).toEqual(["SELF_ASSESSMENT", "MFE", "SPOT_CHECK", "VERIFICATION"]);
+    expect(codes("SUPERVISOR", "MODULE")).toEqual(["SELF_ASSESSMENT", "MFE"]);
+    expect(codes("AUDITOR", "MODULE")).toEqual(["SELF_ASSESSMENT", "MFE"]);
+    expect(codes("VISITOR", "MODULE")).toEqual(["SELF_ASSESSMENT", "MFE"]);
+    expect(codes("ADMIN", "MODULE")).toEqual(["PRE_MOB", "LOD1", "SELF_ASSESSMENT", "MFE"]);
     expect(codes("SUPERVISOR", "START_WORK")).toEqual(["START_WORK_CHECK"]);
   });
 });
@@ -57,7 +62,7 @@ describe("startAssessment", () => {
       kind: "MODULE",
       moduleIds: ["mod-security"],
       userId: "usr-wkr-blessing",
-      locationId: "loc-bonny",
+      locationId: "loc-marconi",
       snapshot: { userName: "Blessing Okon", company: "Coastway Marine", position: "Bridge Officer", vesselName: "Lady Perpetual", packageId: "pkg-epc2" },
     });
     expect((await startAssessment(worker, setup())).reference).toBe(`VAH-A-${YEAR}-0002`);
@@ -65,38 +70,14 @@ describe("startAssessment", () => {
 
   it("covers every active assurance module for Full Vessel Assurance", async () => {
     await repo.modules.update("mod-galley", { active: false });
-    const draft = await startAssessment(supervisor, setup({ kind: "FULL_VESSEL", moduleId: "", auditTypeId: "at-mfe" }));
+    const draft = await startAssessment(auditor, setup({ kind: "FULL_VESSEL", moduleId: "", auditTypeId: "at-mfe" }));
     expect(draft.kind).toBe("FULL_VESSEL");
-    expect(draft.moduleIds).toHaveLength(11);
+    expect(draft.moduleIds).toHaveLength(9);
     expect(draft.moduleIds).not.toContain("mod-galley");
     expect(draft.moduleIds).not.toContain("mod-hot-work");
   });
 
-  it("starts a Start Work Check for a Start Work module with its own audit type only", async () => {
-    const swc = await startAssessment(
-      worker,
-      setup({
-        kind: "START_WORK",
-        moduleId: "mod-hot-work",
-        auditTypeId: "at-start-work-check",
-        taskDescription: "Weld bracket on deck",
-        teamSize: 3,
-      }),
-    );
-    expect(swc).toMatchObject({ kind: "START_WORK", moduleIds: ["mod-hot-work"] });
-
-    await expect(
-      startAssessment(
-        worker,
-        setup({
-          kind: "START_WORK",
-          moduleId: "mod-hot-work",
-          auditTypeId: "at-self-assessment",
-          taskDescription: "Weld bracket on deck",
-          teamSize: 3,
-        }),
-      ),
-    ).rejects.toMatchObject({ name: "PermissionError", code: "FORBIDDEN" });
+  it("keeps the Start Work Check audit type for Start Work Checks (joined from an auditor's check)", async () => {
     await expect(startAssessment(worker, setup({ auditTypeId: "at-start-work-check" }))).rejects.toMatchObject({
       code: "FORBIDDEN",
     });
@@ -104,16 +85,37 @@ describe("startAssessment", () => {
 
   it("enforces the role's audit types even if the UI is bypassed", async () => {
     await expect(startAssessment(worker, setup({ auditTypeId: "at-mfe" }))).rejects.toMatchObject({ code: "FORBIDDEN" });
-    expect(await startAssessment(supervisor, setup({ auditTypeId: "at-mfe" }))).toMatchObject({ status: "DRAFT" });
+    expect(await startAssessment(auditor, setup({ auditTypeId: "at-mfe" }))).toMatchObject({ status: "DRAFT" });
+  });
+
+  it("limits Full Vessel Assurance to auditors and admins", async () => {
+    const fullVessel = (auditTypeId: string) => setup({ kind: "FULL_VESSEL", moduleId: "", auditTypeId });
+    for (const actor of [supervisor, visitor]) {
+      await expect(startAssessment(actor, fullVessel("at-mfe"))).rejects.toMatchObject({ code: "FORBIDDEN" });
+    }
+    await expect(startAssessment(worker, fullVessel("at-lod1"))).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(await startAssessment(auditor, fullVessel("at-self-assessment"))).toMatchObject({ kind: "FULL_VESSEL" });
+    expect(await startAssessment(admin, fullVessel("at-mfe"))).toMatchObject({ kind: "FULL_VESSEL" });
+  });
+
+  it("offers each role only its LOD 1 modules, even if the UI is bypassed", async () => {
+    const leadership = setup({ moduleId: "mod-leadership-engagement", auditTypeId: "at-mfe" });
+    await expect(startAssessment(worker, setup({ moduleId: "mod-leadership-engagement" }))).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+    await expect(startAssessment(supervisor, setup({ auditTypeId: "at-mfe" }))).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(await startAssessment(supervisor, leadership)).toMatchObject({ moduleIds: ["mod-leadership-engagement"] });
+    expect(await startAssessment(visitor, leadership)).toMatchObject({ status: "DRAFT" });
+    expect(await startAssessment(visitor, setup({ auditTypeId: "at-mfe" }))).toMatchObject({ status: "DRAFT" });
   });
 
   it("rejects inactive or wrong-category choices", async () => {
     const invalid = (field: string) => ({ name: "ValidationError", fieldErrors: { [field]: expect.any(String) } });
     await repo.vessels.update("ves-fds", { status: "INACTIVE" });
-    await repo.locations.update("loc-ea", { active: false });
+    await repo.locations.update("loc-onne", { active: false });
 
     await expect(startAssessment(worker, setup({ vesselId: "ves-fds" }))).rejects.toMatchObject(invalid("vesselId"));
-    await expect(startAssessment(worker, setup({ locationId: "loc-ea" }))).rejects.toMatchObject(invalid("locationId"));
+    await expect(startAssessment(worker, setup({ locationId: "loc-onne" }))).rejects.toMatchObject(invalid("locationId"));
     await expect(startAssessment(worker, setup({ moduleId: "mod-hot-work" }))).rejects.toMatchObject(invalid("moduleId"));
     await expect(startAssessment(worker, setup({ vesselId: "" }))).rejects.toMatchObject(invalid("vesselId"));
   });
@@ -135,6 +137,8 @@ describe("access to assessments", () => {
 
     const submitted = { userId: worker.id, status: "SUBMITTED" as const };
     expect(canViewAssessment(supervisor, submitted)).toBe(true);
+    expect(canViewAssessment(auditor, submitted)).toBe(true);
+    expect(canViewAssessment(visitor, submitted)).toBe(false);
     expect(canViewAssessment(otherWorker, submitted)).toBe(false);
   });
 
@@ -184,7 +188,7 @@ describe("countApplicableQuestions", () => {
       await countApplicableQuestions({
         moduleIds: ["mod-security", "mod-navigation-watch"],
         vesselTypeId: "vt-cargo-barge",
-        auditTypeId: "at-self-assessment",
+        auditTypeId: "at-lod1",
       }),
     ).toEqual({ "mod-security": 5, "mod-navigation-watch": 0 });
   });

@@ -30,8 +30,8 @@ async function securityDraft(): Promise<Assessment> {
     kind: "MODULE",
     moduleId: "mod-security",
     vesselId: "ves-lady-perpetual",
-    locationId: "loc-bonny",
-    auditTypeId: "at-self-assessment",
+    locationId: "loc-marconi",
+    auditTypeId: "at-lod1",
   });
 }
 
@@ -84,7 +84,7 @@ describe("owners", () => {
     const list = await listAssignableUsers(owner);
     expect(list.map((u) => u.id)).not.toContain("usr-pending-samuel");
     expect(list.map((u) => u.id)).not.toContain("usr-disabled-kunle");
-    expect(list).toHaveLength(21); // 25 users minus 3 pending and 1 disabled
+    expect(list).toHaveLength(23); // 27 users minus 3 pending and 1 disabled
     expect(Object.keys(list[0]).sort()).toEqual(["company", "id", "name", "position"]);
   });
 });

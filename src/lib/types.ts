@@ -9,7 +9,7 @@ export type ISODate = string;
 
 // ---------- People ----------
 
-export type Role = "WORKER" | "SUPERVISOR" | "ADMIN";
+export type Role = "WORKER" | "SUPERVISOR" | "AUDITOR" | "VISITOR" | "ADMIN";
 export type UserStatus = "PENDING" | "ACTIVE" | "DISABLED";
 
 export interface User {
@@ -79,6 +79,11 @@ export interface Module {
   name: string;
   description: string;
   category: ModuleCategory;
+  /**
+   * Roles that see this module on the LOD 1 Self Assessment list (Assurance modules). Empty = everyone.
+   * Admins always see every module.
+   */
+  roles: Role[];
   displayOrder: number;
   active: boolean;
 }
@@ -115,6 +120,35 @@ export interface StartWorkDetails {
   teamSize: number;
 }
 
+export type StartWorkActivityStatus = "OPEN" | "CLOSED";
+
+/**
+ * A Start Work Check set up by an Auditor (or Admin) for one job. Each person in the team joins it (code, list or
+ * link) and answers their own check (an Assessment with `activityId`). The Auditor closes it when the job is cleared.
+ */
+export interface StartWorkActivity {
+  id: ID;
+  /** "VAH-S-YYYY-NNNN". */
+  reference: string;
+  /** Short join code read out or shown to the crew, e.g. "K7P4QX". Unique among activities. */
+  code: string;
+  /** The Start Work module (the task), e.g. Hot Work. */
+  moduleId: ID;
+  vesselId: ID;
+  locationId: ID;
+  taskDescription: string;
+  /** Number of people expected to take part; also the joining limit. */
+  teamSize: number;
+  createdById: ID;
+  status: StartWorkActivityStatus;
+  closedById: ID | null;
+  closedAt: ISODateTime | null;
+  closureComment: string | null;
+  snapshot: { vesselName: string; packageId: ID; createdByName: string };
+  createdAt: ISODateTime;
+  updatedAt: ISODateTime;
+}
+
 export interface Assessment {
   id: ID;
   /** "VAH-A-YYYY-NNNN", assigned when the draft is created. Deleted drafts leave gaps in the sequence. */
@@ -126,8 +160,10 @@ export interface Assessment {
   vesselId: ID;
   locationId: ID;
   auditTypeId: ID;
-  /** Only for Start Work Checks (kind START_WORK); null otherwise. */
+  /** Only for Start Work Checks (kind START_WORK); null otherwise. Copied from the activity. */
   startWork: StartWorkDetails | null;
+  /** The Start Work Check activity this person joined (START_WORK only); null otherwise. */
+  activityId: ID | null;
   status: AssessmentStatus;
   /** Whole percent, or null when every answer is N/A (or not yet submitted). */
   overallScore: number | null;

@@ -1,6 +1,7 @@
 // MOCK: demo users. All names, companies and emails are fictional. Every demo password is "demo1234".
-// 25 users: the assurance team (Project Marine Team) plus five contractor companies, each crewing two of the
-// featured demo vessels (Deltaport supplies galley and deck crew across the fleet); 3 pending signups, 1 disabled.
+// 27 users: the assurance team (Project Marine Team: admin, supervisors, 2 auditors) plus five contractor companies,
+// each crewing two of the featured demo vessels (Deltaport supplies galley and deck crew across the fleet);
+// 1 visitor, 3 pending signups, 1 disabled.
 
 import type { User } from "@/lib/types";
 
@@ -40,6 +41,23 @@ export const USERS: User[] = [
     position: "Team Lead",
     role: "SUPERVISOR",
   }),
+  // Roles pass (2026-11-16): auditors initiate and close Start Work Checks and run Full Vessel Assurance.
+  user({
+    id: "usr-aud-kemi",
+    name: "Kemi Olatunji",
+    email: "kemi.olatunji@example.com",
+    company: "Project Marine Team",
+    position: "Marine Representative",
+    role: "AUDITOR",
+  }),
+  user({
+    id: "usr-aud-musa",
+    name: "Musa Garba",
+    email: "musa.garba@example.com",
+    company: "Project Marine Team",
+    position: "Offshore Coordinator",
+    role: "AUDITOR",
+  }),
   user({
     id: "usr-wkr-ibrahim",
     name: "Ibrahim Musa",
@@ -74,7 +92,7 @@ export const USERS: User[] = [
   }),
   // Stage 12: more crews and supervisors, so the dashboard has contractors to rank.
   user({ id: "usr-sup-amina", name: "Amina Lawal", email: "amina.lawal@example.com", company: "Project Marine Team", position: "Offshore Coordinator", role: "SUPERVISOR" }),
-  user({ id: "usr-sup-segun", name: "Segun Ogunleye", email: "segun.ogunleye@example.com", company: "Bluewake Vessel Management", position: "Manager/MFE Visitor", role: "SUPERVISOR" }),
+  user({ id: "usr-vis-segun", name: "Segun Ogunleye", email: "segun.ogunleye@example.com", company: "Bluewake Vessel Management", position: "Manager/MFE Visitor", role: "VISITOR" }),
   user({ id: "usr-sup-ruth", name: "Ruth Ekanem", email: "ruth.ekanem@example.com", company: "Riverbend Marine Logistics", position: "Team Lead", role: "SUPERVISOR" }),
   user({ id: "usr-wkr-aisha", name: "Aisha Bello", email: "aisha.bello@example.com", company: "Bluewake Vessel Management", position: "Crew Member", role: "WORKER" }),
   user({ id: "usr-wkr-david", name: "David Okafor", email: "david.okafor@example.com", company: "Bluewake Vessel Management", position: "Bridge Officer", role: "WORKER" }),

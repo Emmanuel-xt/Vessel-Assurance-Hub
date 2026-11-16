@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { AlertCircle, Clock, HardHat, UserCog, UserPlus } from "lucide-react";
+import { AlertCircle, ClipboardCheck, Clock, HardHat, UserCog, UserPlus, UserRound } from "lucide-react";
 import { FormField, INPUT_CLASS, fieldA11y } from "@/components/forms/form-field";
 import { NativeSelect } from "@/components/forms/native-select";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -39,8 +39,10 @@ const EMPTY: FormValues = {
 };
 
 const ROLE_OPTIONS = {
-  WORKER: { icon: HardHat, description: "Self assessments and start work checks." },
-  SUPERVISOR: { icon: UserCog, description: "Adds MFE, spot checks and verifications." },
+  WORKER: { icon: HardHat, description: "LOD 1 checks (Pre-Mob, LOD 1) and joining start work checks." },
+  SUPERVISOR: { icon: UserCog, description: "Leadership modules: Self Assessment and MFE." },
+  AUDITOR: { icon: ClipboardCheck, description: "Starts and closes start work checks; Full Vessel Assurance." },
+  VISITOR: { icon: UserRound, description: "Visiting manager: Self Assessment and MFE on any module." },
 } as const;
 
 export function SignupForm() {

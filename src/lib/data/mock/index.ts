@@ -2,7 +2,7 @@
 
 import type { Repositories } from "@/lib/data/repositories";
 import { auth, logInAs } from "./auth";
-import { assessments, responses } from "./assessment-repositories";
+import { assessments, responses, startWorkActivities } from "./assessment-repositories";
 import {
   actions,
   findingActivities,
@@ -39,6 +39,7 @@ export const mockRepositories: Repositories = {
   questions,
   assessments,
   responses,
+  startWorkActivities,
   findings,
   actions,
   findingActivities,

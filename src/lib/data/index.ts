@@ -20,6 +20,7 @@ export const {
   questions,
   assessments,
   responses,
+  startWorkActivities,
   findings,
   actions,
   findingActivities,

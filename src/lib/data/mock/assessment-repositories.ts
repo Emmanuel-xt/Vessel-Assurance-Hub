@@ -1,4 +1,4 @@
-// MOCK: assessments and their responses.
+// MOCK: assessments, their responses and Start Work Check activities.
 
 import {
   RepositoryError,
@@ -9,9 +9,14 @@ import {
   type ResponseCreateInput,
   type ResponsePatch,
   type ResponsesRepository,
+  type StartWorkActivitiesRepository,
+  type StartWorkActivityCreateInput,
+  type StartWorkActivityFilter,
+  type StartWorkActivityPatch,
 } from "@/lib/data/repositories";
+import { joinCodeFrom, normalizeJoinCode } from "@/lib/services/join-codes";
 import { formatReference, referenceYear, sequenceKey } from "@/lib/services/references";
-import type { Assessment, ID, Response } from "@/lib/types";
+import type { Assessment, ID, Response, StartWorkActivity } from "@/lib/types";
 import { crud, requireRow, rows } from "./crud";
 import { removePhoto } from "./photo-store";
 import { db, nextSequence, persist } from "./store";
@@ -40,6 +45,7 @@ const assessmentsCrud = crud<"assessments", AssessmentCreateInput, AssessmentFil
     return {
       ...input,
       startWork: input.startWork ? { ...input.startWork } : null,
+      activityId: input.activityId ?? null,
       id: newId(),
       reference: nextAssessmentReference(),
       status: "DRAFT",
@@ -58,7 +64,10 @@ const assessmentsCrud = crud<"assessments", AssessmentCreateInput, AssessmentFil
     };
   },
   matches: (a, f) =>
-    (!f.userId || a.userId === f.userId) && (!f.status || a.status === f.status) && (!f.vesselId || a.vesselId === f.vesselId),
+    (!f.userId || a.userId === f.userId) &&
+    (!f.status || a.status === f.status) &&
+    (!f.vesselId || a.vesselId === f.vesselId) &&
+    (!f.activityId || a.activityId === f.activityId),
   compare: (a, b) => b.updatedAt.localeCompare(a.updatedAt),
   beforeUpdate: (row) => assertDraft(row),
   afterUpdate: (row) => {
@@ -117,6 +126,67 @@ export const assessments: AssessmentsRepository = {
     data.assessments = data.assessments.filter((a) => a.id !== id);
     persist();
     await Promise.all(photoIds.map((photoId) => removePhoto(photoId).catch(() => undefined)));
+  },
+};
+
+// ---------- Start Work Check activities ----------
+
+/** MOCK: crypto-random join code, unique among stored activities. Production: generated server-side. */
+function newJoinCode(): string {
+  const taken = new Set(rows("startWorkActivities").map((a) => a.code));
+  const random = () => crypto.getRandomValues(new Uint32Array(1))[0] / 4_294_967_296;
+  for (;;) {
+    const code = joinCodeFrom(random);
+    if (!taken.has(code)) return code;
+  }
+}
+
+const activitiesCrud = crud<
+  "startWorkActivities",
+  StartWorkActivityCreateInput,
+  StartWorkActivityFilter,
+  StartWorkActivityPatch
+>("startWorkActivities", {
+  entity: "Start Work Check",
+  build: (input): StartWorkActivity => {
+    const creator = requireRow("users", input.createdById, "User");
+    const vessel = requireRow("vessels", input.vesselId, "Vessel");
+    const year = referenceYear(new Date());
+    const now = nowIso();
+    return {
+      ...input,
+      id: newId(),
+      reference: formatReference("startWorkActivity", year, nextSequence(sequenceKey("startWorkActivity", year))),
+      code: newJoinCode(),
+      status: "OPEN",
+      closedById: null,
+      closedAt: null,
+      closureComment: null,
+      snapshot: { vesselName: vessel.name, packageId: vessel.packageId, createdByName: creator.name },
+      createdAt: now,
+      updatedAt: now,
+    };
+  },
+  matches: (a, f) =>
+    (!f.status || a.status === f.status) &&
+    (!f.createdById || a.createdById === f.createdById) &&
+    (!f.vesselId || a.vesselId === f.vesselId),
+  compare: (a, b) => b.createdAt.localeCompare(a.createdAt),
+  beforeUpdate: (row) => {
+    if (row.status === "CLOSED") throw new RepositoryError("CONFLICT", `${row.reference} is already closed`);
+  },
+  afterUpdate: (row) => {
+    row.updatedAt = nowIso();
+  },
+});
+
+export const startWorkActivities: StartWorkActivitiesRepository = {
+  ...activitiesCrud,
+  async findByCode(code) {
+    await simulateLatency();
+    const wanted = normalizeJoinCode(code);
+    const found = rows("startWorkActivities").find((a) => a.code === wanted);
+    return found ? clone(found) : null;
   },
 };
 

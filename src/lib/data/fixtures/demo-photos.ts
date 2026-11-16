@@ -8,7 +8,7 @@ import { MODULE_CONTENT } from "./demo-content";
 export const DEMO_PHOTO_PREFIX = "demo-photo-";
 export const DEMO_PHOTO_SIZE = { width: 320, height: 240 } as const;
 
-/** "demo-photo-<moduleId>-<n>", e.g. "demo-photo-mod-bunkering-007". */
+/** "demo-photo-<moduleId>-<n>", e.g. "demo-photo-mod-galley-007". */
 export function demoPhotoId(moduleId: string, n: number): string {
   return `${DEMO_PHOTO_PREFIX}${moduleId}-${String(n).padStart(3, "0")}`;
 }

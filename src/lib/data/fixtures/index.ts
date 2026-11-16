@@ -29,6 +29,7 @@ export function buildFixtures(options: FixtureOptions = {}): DemoData {
     questions: QUESTIONS,
     assessments: history?.assessments ?? [],
     responses: history?.responses ?? [],
+    startWorkActivities: history?.startWorkActivities ?? [],
     findings: history?.findings ?? [],
     actions: history?.actions ?? [],
     findingActivities: history?.findingActivities ?? [],

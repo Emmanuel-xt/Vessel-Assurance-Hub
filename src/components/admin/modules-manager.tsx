@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { modules, questions } from "@/lib/data";
 import { useRepoQuery } from "@/lib/data/hooks";
+import { ROLE_LABELS } from "@/lib/constants";
 import { moveModule, setModuleActive } from "@/lib/services/admin/modules";
 import type { MoveDirection } from "@/lib/services/ordering";
 import type { Module } from "@/lib/types";
@@ -88,6 +89,8 @@ export function ModulesManager() {
                       </div>
                       <p className="text-xs text-muted-foreground">
                         {count} active question{count === 1 ? "" : "s"}
+                        {module.category === "ASSURANCE" &&
+                          ` · Shown to ${module.roles.length === 0 ? "everyone" : module.roles.map((r) => ROLE_LABELS[r]).join(", ")}`}
                         {module.description && ` · ${module.description}`}
                       </p>
                     </div>

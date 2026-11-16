@@ -25,14 +25,15 @@ import type { Answer, Assessment } from "@/lib/types";
 const blessing: Principal = { id: "usr-wkr-blessing", role: "WORKER", status: "ACTIVE" };
 const emeka: Principal = { id: "usr-wkr-emeka", role: "WORKER", status: "ACTIVE" };
 const supervisor: Principal = { id: "usr-sup-tunde", role: "SUPERVISOR", status: "ACTIVE" };
+const auditor: Principal = { id: "usr-aud-kemi", role: "AUDITOR", status: "ACTIVE" };
 const admin: Principal = { id: "usr-admin", role: "ADMIN", status: "ACTIVE" };
 
 const security = (overrides: Partial<AssessmentSetupValues> = {}): AssessmentSetupValues => ({
   kind: "MODULE",
   moduleId: "mod-security",
   vesselId: "ves-lady-perpetual",
-  locationId: "loc-bonny",
-  auditTypeId: "at-self-assessment",
+  locationId: "loc-marconi",
+  auditTypeId: "at-lod1",
   ...overrides,
 });
 
@@ -76,14 +77,14 @@ describe("My assessments", () => {
   it("splits drafts and submitted, with names for display", async () => {
     const first = await submitted(blessing);
     const draft = await startAssessment(blessing, security({ moduleId: "mod-galley" }));
-    const second = await submitted(blessing, { vesselId: "ves-fds", locationId: "loc-ea" });
+    const second = await submitted(blessing, { vesselId: "ves-fds", locationId: "loc-onne" });
     await submitted(emeka); // someone else's
 
     const mine = await listMyAssessmentRows(blessing);
     expect(mine.drafts.map((r) => r.assessment.id)).toEqual([draft.id]);
-    expect(mine.drafts[0]).toMatchObject({ title: "Galley", auditTypeName: "Self Assessment", locationName: "Bonny" });
+    expect(mine.drafts[0]).toMatchObject({ title: "Galley", auditTypeName: "LOD 1", locationName: "Marconi" });
     expect(mine.submitted.map((r) => r.assessment.id)).toEqual([second.id, first.id]);
-    expect(mine.submitted[0]).toMatchObject({ title: "Security", locationName: "EA", openFindings: 0 });
+    expect(mine.submitted[0]).toMatchObject({ title: "Security", locationName: "Onne", openFindings: 0 });
   });
 
   it("deletes only the actor's own drafts", async () => {
@@ -99,7 +100,7 @@ describe("My assessments", () => {
 });
 
 describe("All assessments", () => {
-  it("is for supervisors and admins only", async () => {
+  it("is for supervisors, auditors and admins only", async () => {
     await expect(listAllAssessmentRows(blessing)).rejects.toMatchObject({ code: "FORBIDDEN" });
     await expect(loadFilterOptions(blessing)).rejects.toMatchObject({ code: "FORBIDDEN" });
     expect(await listAllAssessmentRows(supervisor)).toEqual([]);
@@ -107,29 +108,29 @@ describe("All assessments", () => {
 
   it("lists submitted assessments only, newest first, and filters them", async () => {
     const a = await submitted(blessing);
-    const b = await submitted(emeka, { vesselId: "ves-fds", locationId: "loc-ea" });
-    const c = await submitted(supervisor, { moduleId: "mod-galley", auditTypeId: "at-mfe" });
+    const b = await submitted(emeka, { vesselId: "ves-fds", locationId: "loc-onne" });
+    const c = await submitted(auditor, { moduleId: "mod-galley", auditTypeId: "at-mfe" });
     await startAssessment(blessing, security()); // draft: never listed
 
     const ids = (rows: { assessment: Assessment }[]) => rows.map((r) => r.assessment.id);
     expect(ids(await listAllAssessmentRows(admin))).toEqual([c.id, b.id, a.id]);
     expect(ids(await listAllAssessmentRows(admin, { vesselId: "ves-fds" }))).toEqual([b.id]);
-    expect(ids(await listAllAssessmentRows(admin, { locationId: "loc-bonny" }))).toEqual([c.id, a.id]);
+    expect(ids(await listAllAssessmentRows(admin, { locationId: "loc-marconi" }))).toEqual([c.id, a.id]);
     expect(ids(await listAllAssessmentRows(admin, { moduleId: "mod-galley" }))).toEqual([c.id]);
-    expect(ids(await listAllAssessmentRows(admin, { auditTypeId: "at-self-assessment" }))).toEqual([b.id, a.id]);
+    expect(ids(await listAllAssessmentRows(admin, { auditTypeId: "at-lod1" }))).toEqual([b.id, a.id]);
     expect(ids(await listAllAssessmentRows(supervisor, { userId: "usr-wkr-emeka" }))).toEqual([b.id]);
   });
 
   it("filters by package, contractor, self/supervisory and a question answered No", async () => {
     const a = await submitted(blessing, {}, ["YES", "YES", "NO"]); // Coastway Marine, EPC2, self
-    const b = await submitted(supervisor, { auditTypeId: "at-mfe", vesselId: "ves-blue-gretha" }); // EPC1, supervisory
+    const b = await submitted(auditor, { auditTypeId: "at-mfe", vesselId: "ves-blue-gretha" }); // EPC1, supervisory
     const ids = (rows: { assessment: Assessment }[]) => rows.map((r) => r.assessment.id);
 
     expect(ids(await listAllAssessmentRows(admin, { packageId: "pkg-epc1" }))).toEqual([b.id]);
     expect(ids(await listAllAssessmentRows(admin, { company: "Coastway Marine" }))).toEqual([a.id]);
     expect(ids(await listAllAssessmentRows(admin, { scope: "self" }))).toEqual([a.id]);
     expect(ids(await listAllAssessmentRows(admin, { scope: "supervisory" }))).toEqual([b.id]);
-    expect(ids(await listAllAssessmentRows(admin, { scope: "supervisory", auditTypeId: "at-self-assessment" }))).toEqual([]);
+    expect(ids(await listAllAssessmentRows(admin, { scope: "supervisory", auditTypeId: "at-lod1" }))).toEqual([]);
     expect(ids(await listAllAssessmentRows(admin, { questionId: "q-security-03" }))).toEqual([a.id]);
     expect(ids(await listAllAssessmentRows(admin, { questionId: "q-security-01" }))).toEqual([]);
   });
@@ -168,7 +169,7 @@ describe("assessment detail", () => {
     await repo.questions.update("q-security-03", { text: "Reworded later", active: false });
 
     const detail = await loadAssessmentDetail(supervisor, done.id);
-    expect(detail).toMatchObject({ title: "Security", locationName: "Bonny", packageName: "EPC2", editable: false });
+    expect(detail).toMatchObject({ title: "Security", locationName: "Marconi", packageName: "EPC2", editable: false });
     const items = detail.sections[0].items;
     expect(items.map((i) => i.number)).toEqual([1, 2, 3, 4, 5]);
     expect(items[2].text).not.toBe("Reworded later");

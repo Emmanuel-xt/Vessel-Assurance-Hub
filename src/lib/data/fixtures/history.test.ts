@@ -25,13 +25,14 @@ const onVessel = (name: string) => history.assessments.filter((a) => a.vesselId 
 const ageDays = (a: Assessment) => (today.getTime() - Date.parse(a.submittedAt!)) / DAY;
 
 describe("generated demo history", () => {
-  it("has 300 submitted assessments over the last 6 months, in reference order", () => {
-    expect(history.assessments).toHaveLength(300);
+  it("has ~300 submitted assessments over the last 6 months, in reference order", () => {
+    expect(history.assessments.length).toBeGreaterThanOrEqual(290);
+    expect(history.assessments.length).toBeLessThanOrEqual(310);
     const times = history.assessments.map((a) => Date.parse(a.submittedAt!));
     expect(Math.max(...times)).toBeLessThan(today.getTime());
     expect(Math.min(...times)).toBeGreaterThan(today.getTime() - 183 * DAY);
     expect(times).toEqual([...times].sort((a, b) => a - b));
-    expect(new Set(history.assessments.map((a) => a.reference)).size).toBe(300);
+    expect(new Set(history.assessments.map((a) => a.reference)).size).toBe(history.assessments.length);
     expect(history.assessments.every((a) => a.status === "SUBMITTED")).toBe(true);
   });
 
@@ -43,14 +44,14 @@ describe("generated demo history", () => {
     expect(new Set(history.assessments.map((a) => a.auditTypeId))).toEqual(new Set(AUDIT_TYPES.map((t) => t.id)));
     expect(new Set(history.assessments.map((a) => a.kind))).toEqual(new Set(["MODULE", "START_WORK", "FULL_VESSEL"]));
     const modules = new Set(history.assessments.flatMap((a) => a.moduleIds));
-    expect(modules.size).toBe(17);
+    expect(modules.size).toBe(15);
   });
 
-  it("happens on the 8 featured vessels, two per location", () => {
+  it("happens on the 8 featured vessels, two per named location", () => {
     const used = new Set(history.assessments.map((a) => a.snapshot.vesselName));
     expect(used).toEqual(new Set(Object.keys(FEATURED_VESSELS)));
     const perLocation = Object.values(FEATURED_VESSELS).reduce<Record<string, number>>((m, l) => ({ ...m, [l]: (m[l] ?? 0) + 1 }), {});
-    expect(perLocation).toEqual({ "loc-bonga": 2, "loc-ea": 2, "loc-forcados": 2, "loc-bonny": 2 });
+    expect(perLocation).toEqual({ "loc-bonga": 2, "loc-onne": 2, "loc-aveon": 2, "loc-marconi": 2 });
     for (const [name, location] of Object.entries(FEATURED_VESSELS)) {
       expect(VESSELS.find((v) => v.name === name)?.defaultLocationId).toBe(location);
     }
@@ -81,6 +82,31 @@ describe("generated demo history", () => {
     expect(history.responses.some((r) => startWork.has(r.assessmentId) && r.answer === "CONCERN")).toBe(false);
     expect(history.assessments.filter((a) => a.kind === "START_WORK").every((a) => a.startWork !== null)).toBe(true);
     expect(history.assessments.every((a) => a.auditTypeId !== "at-start-work-check" || a.kind === "START_WORK")).toBe(true);
+  });
+
+  it("groups Start Work Checks into auditors' activities, with a couple open today", () => {
+    const byId = new Map(history.startWorkActivities.map((a) => [a.id, a]));
+    const startWork = history.assessments.filter((a) => a.kind === "START_WORK");
+    expect(history.startWorkActivities.length).toBeGreaterThanOrEqual(15);
+    for (const check of startWork) {
+      const activity = byId.get(check.activityId!)!;
+      expect(activity).toBeDefined();
+      expect(check).toMatchObject({ vesselId: activity.vesselId, moduleIds: [activity.moduleId] });
+      expect(check.startWork).toEqual({ taskDescription: activity.taskDescription, teamSize: activity.teamSize });
+    }
+    expect(history.assessments.filter((a) => a.kind !== "START_WORK").every((a) => a.activityId === null)).toBe(true);
+    for (const activity of history.startWorkActivities) {
+      const team = startWork.filter((a) => a.activityId === activity.id);
+      expect(team.length).toBeLessThanOrEqual(activity.teamSize);
+      expect(new Set(team.map((a) => a.userId)).size).toBe(team.length); // one check per person
+      expect(USERS.find((u) => u.id === activity.createdById)?.role).toMatch(/AUDITOR|ADMIN/);
+      if (activity.status === "CLOSED") expect(activity.closedAt! >= (team.at(-1)?.submittedAt ?? "")).toBe(true);
+    }
+    const open = history.startWorkActivities.filter((a) => a.status === "OPEN");
+    expect(open).toHaveLength(2);
+    // The demo worker can join both live checks.
+    expect(startWork.some((a) => open.some((o) => o.id === a.activityId) && a.userId === "usr-wkr-ibrahim")).toBe(false);
+    expect(new Set(history.startWorkActivities.map((a) => a.code)).size).toBe(history.startWorkActivities.length);
   });
 
   it("has a few Start Work Checks that ended in a STOP", () => {
@@ -173,8 +199,11 @@ describe("generated demo history", () => {
     }
   });
 
-  it("has ~25 users across five contractor companies, with pending signups to approve", () => {
-    expect(USERS).toHaveLength(25);
+  it("has ~27 users across five contractor companies, with every role and pending signups to approve", () => {
+    expect(USERS).toHaveLength(27);
+    for (const role of ["WORKER", "SUPERVISOR", "AUDITOR", "VISITOR", "ADMIN"] as const) {
+      expect(USERS.some((u) => u.role === role && u.status === "ACTIVE")).toBe(true);
+    }
     expect(USERS.filter((u) => u.status === "PENDING")).toHaveLength(3);
     const contractors = new Set(USERS.map((u) => u.company).filter((c) => c !== "Project Marine Team"));
     expect(contractors.size).toBe(5);

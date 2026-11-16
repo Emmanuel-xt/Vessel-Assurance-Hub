@@ -5,6 +5,8 @@ import type { Role } from "@/lib/types";
 export const ROLE_LABELS: Record<Role, string> = {
   WORKER: "Worker",
   SUPERVISOR: "Supervisor",
+  AUDITOR: "Auditor",
+  VISITOR: "Visitor",
   ADMIN: "Admin",
 };
 

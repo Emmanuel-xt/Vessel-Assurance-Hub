@@ -89,7 +89,7 @@ function Detail({ detail }: { detail: AssessmentDetail }) {
           {detail.title}
           {detail.subtitle && <span className="font-normal text-muted-foreground"> · {detail.subtitle}</span>}
         </h1>
-        {a.startWork && <StartWorkDetailsLine details={a.startWork} />}
+        {a.startWork && <StartWorkDetailsLine details={a.startWork} activityId={a.activityId} />}
 
         <dl className="grid grid-cols-1 gap-x-6 gap-y-2 rounded-2xl border bg-card p-4 text-sm sm:grid-cols-2 print:grid-cols-3 print:rounded-none print:border-x-0 print:px-0">
           <Info label="Vessel" value={`${a.snapshot.vesselName} · ${detail.packageName}`} />

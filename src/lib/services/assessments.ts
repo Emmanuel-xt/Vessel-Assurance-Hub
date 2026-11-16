@@ -14,6 +14,7 @@ import {
   RepositoryError,
   type PhotoDimensions,
   responses,
+  startWorkActivities,
   vessels,
 } from "@/lib/data";
 import { getAssessmentForUser, requireEditableDraft } from "@/lib/services/assessment-access";
@@ -24,6 +25,8 @@ import {
   PermissionError,
   allowedAuditTypesFor,
   canEditAssessment,
+  canStartFullVessel,
+  isModuleVisibleTo,
   requireUser,
   type Principal,
 } from "@/lib/services/permissions";
@@ -102,46 +105,22 @@ const CATEGORY_FOR: Record<AssessmentKind, Module["category"]> = {
 
 // ---------- Starting a draft ----------
 
-export const TASK_DESCRIPTION_LENGTH = { min: 3, max: 200 } as const;
-export const TEAM_SIZE_RANGE = { min: 1, max: 99 } as const;
-
+/**
+ * Setup for a single-module (LOD 1) or Full Vessel assessment. Start Work Checks are not started here: crews join an
+ * Auditor's Start Work Check (src/lib/services/start-work-activities.ts).
+ */
 export const assessmentSetupSchema = z
   .object({
-    kind: z.enum(["MODULE", "FULL_VESSEL", "START_WORK"]),
-    /** The module (MODULE) or the task (START_WORK). Not used for FULL_VESSEL. */
+    kind: z.enum(["MODULE", "FULL_VESSEL"], { error: "Start Work Checks are joined from an auditor's check" }),
+    /** The module (MODULE). Not used for FULL_VESSEL. */
     moduleId: z.string(),
     vesselId: z.string().min(1, { error: "Choose a vessel" }),
     locationId: z.string().min(1, { error: "Choose a location" }),
     auditTypeId: z.string().min(1, { error: "Choose an audit type" }),
-    /** Start Work Checks only: the job about to start. */
-    taskDescription: z.string().optional(),
-    /** Start Work Checks only: people in the team. */
-    teamSize: z.number().optional(),
   })
   .refine((v) => v.kind === "FULL_VESSEL" || v.moduleId !== "", {
     error: "Choose what you are checking",
     path: ["moduleId"],
-  })
-  .superRefine((v, ctx) => {
-    if (v.kind !== "START_WORK") return;
-    const task = (v.taskDescription ?? "").trim();
-    if (task.length < TASK_DESCRIPTION_LENGTH.min) {
-      ctx.addIssue({ code: "custom", path: ["taskDescription"], message: "Describe the job you are about to start" });
-    } else if (task.length > TASK_DESCRIPTION_LENGTH.max) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["taskDescription"],
-        message: `Keep it under ${TASK_DESCRIPTION_LENGTH.max} characters`,
-      });
-    }
-    const size = v.teamSize;
-    if (size === undefined || !Number.isInteger(size) || size < TEAM_SIZE_RANGE.min || size > TEAM_SIZE_RANGE.max) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["teamSize"],
-        message: `Enter the number of people (${TEAM_SIZE_RANGE.min}–${TEAM_SIZE_RANGE.max})`,
-      });
-    }
   });
 
 export type AssessmentSetupValues = z.input<typeof assessmentSetupSchema>;
@@ -181,11 +160,18 @@ export async function startAssessment(actor: Principal, input: AssessmentSetupVa
 
   let moduleIds: ID[];
   if (values.kind === "FULL_VESSEL") {
+    if (!canStartFullVessel(user)) {
+      throw new PermissionError("FORBIDDEN", "Full Vessel Assurance is for auditors and admins.");
+    }
     if (eligibleModules.length === 0) throw new ValidationError("There are no active assurance modules.");
     moduleIds = eligibleModules.map((m) => m.id);
   } else {
-    if (!eligibleModules.some((m) => m.id === values.moduleId)) {
+    const chosen = eligibleModules.find((m) => m.id === values.moduleId);
+    if (!chosen) {
       throw new ValidationError("This module is not available.", { moduleId: "Choose an available option" });
+    }
+    if (values.kind === "MODULE" && !isModuleVisibleTo(user.role, chosen)) {
+      throw new PermissionError("FORBIDDEN", `${chosen.name} is not on your LOD 1 Self Assessment list.`);
     }
     moduleIds = [values.moduleId];
   }
@@ -197,10 +183,6 @@ export async function startAssessment(actor: Principal, input: AssessmentSetupVa
     vesselId: vessel.id,
     locationId: location.id,
     auditTypeId: auditType.id,
-    startWork:
-      values.kind === "START_WORK"
-        ? { taskDescription: (values.taskDescription ?? "").trim(), teamSize: values.teamSize! }
-        : null,
   });
 }
 
@@ -437,6 +419,15 @@ export function missingEvidence(
  */
 export async function submitAssessment(actor: Principal, id: ID): Promise<Assessment> {
   const assessment = await requireEditableDraft(actor, id);
+  if (assessment.activityId) {
+    const activity = await startWorkActivities.get(assessment.activityId);
+    if (!activity || activity.status === "CLOSED") {
+      throw new RepositoryError(
+        "CONFLICT",
+        `${activity?.reference ?? "This Start Work Check"} was closed by the auditor, so this check can no longer be submitted.`,
+      );
+    }
+  }
   const [sections, saved] = await Promise.all([applicableSections(assessment), responses.listByAssessment(id)]);
   const answers = Object.fromEntries(saved.map((r) => [r.questionId, r]));
 

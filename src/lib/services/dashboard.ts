@@ -56,13 +56,13 @@ export interface DashboardData {
 }
 
 /**
- * Everything the dashboard needs, in one go (supervisors and admins).
+ * Everything the dashboard needs, in one go (supervisors, auditors and admins).
  * MOCK: downloads every submitted assessment, response, finding and action to the browser. Production: server-side
  * aggregation, where each pure function below becomes a database query (WHERE / GROUP BY).
  */
 export async function loadDashboardData(actor: Principal): Promise<DashboardData> {
   const user = requireUser(actor);
-  if (!canViewDashboard(user)) throw new PermissionError("FORBIDDEN", "Only supervisors and admins can see the dashboard.");
+  if (!canViewDashboard(user)) throw new PermissionError("FORBIDDEN", "Only supervisors, auditors and admins can see the dashboard.");
   const [submitted, allResponses, findingList, actionList, interventions, vesselList, locationList, packageList, moduleList, typeList] =
     await Promise.all([
       assessments.listSubmitted(),

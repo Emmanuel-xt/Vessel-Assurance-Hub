@@ -13,15 +13,16 @@ import type {
   PositiveIntervention,
   Question,
   Response,
+  StartWorkActivity,
   User,
   Vessel,
 } from "@/lib/types";
 
 /** Bump the version suffix whenever DemoData changes shape: old saved data is then discarded and reseeded. */
-export const STORAGE_KEY = "vah-demo-v2"; // v2: the presentation data set (2026-11-06)
+export const STORAGE_KEY = "vah-demo-v4"; // v4: roles pass + Start Work Check activities (2026-11-16)
 
 /** Keys used by earlier versions; removed on first load so old copies do not fill up browser storage. */
-export const LEGACY_STORAGE_KEYS = ["vah-demo-v1", "vah-demo-v1-session"];
+export const LEGACY_STORAGE_KEYS = ["vah-demo-v1", "vah-demo-v1-session", "vah-demo-v2", "vah-demo-v2-session", "vah-demo-v3", "vah-demo-v3-session"];
 
 export interface DemoData {
   users: User[];
@@ -35,6 +36,7 @@ export interface DemoData {
   questions: Question[];
   assessments: Assessment[];
   responses: Response[];
+  startWorkActivities: StartWorkActivity[];
   findings: Finding[];
   actions: Action[];
   findingActivities: FindingActivity[];

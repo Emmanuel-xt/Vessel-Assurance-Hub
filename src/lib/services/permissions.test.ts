@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { AUDIT_TYPES } from "@/lib/data/fixtures/lookups";
+import { MODULES } from "@/lib/data/fixtures/modules";
 import {
   canAccessAdmin,
   canChangeUserRole,
   canChangeUserStatus,
+  canStartFullVessel,
   canUseAuditType,
   canViewDashboard,
+  isModuleVisibleTo,
+  modulesVisibleTo,
   requireRole,
   requireUser,
   signInBlock,
@@ -42,14 +46,18 @@ describe("requireRole", () => {
 });
 
 describe("canUseAuditType with the seeded audit types", () => {
-  it("limits workers to Self Assessment and Start Work Check", () => {
-    expect(allowedCodes("WORKER")).toEqual(["SELF_ASSESSMENT", "START_WORK_CHECK"]);
+  it("limits workers to Pre-Mob, LOD 1 and Start Work Check", () => {
+    expect(allowedCodes("WORKER")).toEqual(["PRE_MOB", "LOD1", "START_WORK_CHECK"]);
   });
 
-  it("gives supervisors and admins every audit type", () => {
-    const all = AUDIT_TYPES.map((t) => t.code);
-    expect(allowedCodes("SUPERVISOR")).toEqual(all);
-    expect(allowedCodes("ADMIN")).toEqual(all);
+  it("gives supervisors, auditors and visitors Self Assessment, MFE and Start Work Check", () => {
+    for (const role of ["SUPERVISOR", "AUDITOR", "VISITOR"] as const) {
+      expect(allowedCodes(role)).toEqual(["SELF_ASSESSMENT", "MFE", "START_WORK_CHECK"]);
+    }
+  });
+
+  it("gives admins every audit type", () => {
+    expect(allowedCodes("ADMIN")).toEqual(AUDIT_TYPES.map((t) => t.code));
   });
 
   it("follows admin edits and never allows an inactive audit type", () => {
@@ -58,10 +66,36 @@ describe("canUseAuditType with the seeded audit types", () => {
   });
 });
 
+describe("LOD 1 modules and Full Vessel Assurance", () => {
+  const visible = (role: Parameters<typeof modulesVisibleTo>[0]) =>
+    modulesVisibleTo(role, MODULES.filter((m) => m.category === "ASSURANCE")).map((m) => m.id);
+  const LEADERSHIP = ["mod-leadership-engagement", "mod-contractor-management", "mod-learning-action-closure"];
+
+  it("shows workers the crew modules, supervisors only the 3 leadership modules", () => {
+    expect(visible("WORKER")).toHaveLength(7);
+    expect(visible("WORKER")).not.toEqual(expect.arrayContaining([LEADERSHIP[0]]));
+    expect(visible("SUPERVISOR")).toEqual(LEADERSHIP);
+  });
+
+  it("shows auditors, visitors and admins every module", () => {
+    for (const role of ["AUDITOR", "VISITOR", "ADMIN"] as const) expect(visible(role)).toHaveLength(10);
+    expect(isModuleVisibleTo("ADMIN", { roles: ["WORKER"] })).toBe(true);
+    expect(isModuleVisibleTo("WORKER", { roles: [] })).toBe(true);
+  });
+
+  it("opens Full Vessel Assurance to auditors and admins only", () => {
+    expect(
+      (["WORKER", "SUPERVISOR", "AUDITOR", "VISITOR", "ADMIN"] as const).map((role) => canStartFullVessel(person(role))),
+    ).toEqual([false, false, true, false, true]);
+  });
+});
+
 describe("area access", () => {
-  it("opens admin to admins only and the dashboard to supervisors and admins", () => {
+  it("opens admin to admins only and the dashboard to supervisors, auditors and admins", () => {
     expect([canAccessAdmin(person("ADMIN")), canAccessAdmin(person("SUPERVISOR"))]).toEqual([true, false]);
-    expect([canViewDashboard(person("WORKER")), canViewDashboard(person("SUPERVISOR"))]).toEqual([false, true]);
+    expect(
+      (["WORKER", "SUPERVISOR", "AUDITOR", "VISITOR", "ADMIN"] as const).map((role) => canViewDashboard(person(role))),
+    ).toEqual([false, true, true, false, true]);
     expect(canAccessAdmin(person("ADMIN", "DISABLED"))).toBe(false);
   });
 

@@ -1,20 +1,24 @@
 import { CheckCircle2, ClipboardList, MessageSquare, OctagonX, Users } from "lucide-react";
+import { ActivityLink } from "@/components/start-work/activity-link";
 import type { ID, Question, Response, StartWorkDetails } from "@/lib/types";
 
 export const teamLabel = (size: number) => `${size} ${size === 1 ? "person" : "people"}`;
 
-/** "Job: … · 4 people" line for Start Work Checks. */
-export function StartWorkDetailsLine({ details }: { details: StartWorkDetails }) {
+/** "Job: … · 4 people" line for Start Work Checks, plus a link to the auditor's check it belongs to. */
+export function StartWorkDetailsLine({ details, activityId }: { details: StartWorkDetails; activityId?: ID | null }) {
   return (
-    <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
-      <span className="inline-flex items-center gap-1.5">
-        <ClipboardList className="size-4 shrink-0" aria-hidden />
-        <span className="sr-only">Job:</span> {details.taskDescription}
-      </span>
-      <span className="inline-flex items-center gap-1.5">
-        <Users className="size-4 shrink-0" aria-hidden /> {teamLabel(details.teamSize)}
-      </span>
-    </p>
+    <>
+      <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
+        <span className="inline-flex items-center gap-1.5">
+          <ClipboardList className="size-4 shrink-0" aria-hidden />
+          <span className="sr-only">Job:</span> {details.taskDescription}
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <Users className="size-4 shrink-0" aria-hidden /> {teamLabel(details.teamSize)}
+        </span>
+      </p>
+      {activityId && <ActivityLink activityId={activityId} />}
+    </>
   );
 }
 

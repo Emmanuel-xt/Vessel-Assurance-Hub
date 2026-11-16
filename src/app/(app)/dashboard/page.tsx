@@ -3,7 +3,7 @@ import { DashboardScreen } from "@/components/dashboard/dashboard-screen";
 
 export const metadata = { title: "Dashboard" };
 
-// Access (supervisors and admins) is checked in ./layout.tsx.
+// Access (supervisors, auditors and admins) is checked in ./layout.tsx.
 export default function DashboardPage() {
   return (
     <Suspense>

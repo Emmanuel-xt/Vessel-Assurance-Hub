@@ -10,31 +10,49 @@ import {
   startAssessment,
   stopWorkItems,
   submitAssessment,
-  type AssessmentSetupValues,
 } from "@/lib/services/assessments";
+import { deleteMyDraft } from "@/lib/services/assessment-lists";
 import { addFindingDraft, defaultTargetDate } from "@/lib/services/findings";
+import { JOIN_CODE_ALPHABET, formatJoinCode, normalizeJoinCode } from "@/lib/services/join-codes";
 import type { Principal } from "@/lib/services/permissions";
-import type { Answer, Assessment } from "@/lib/types";
+import {
+  closeActivity,
+  createActivity,
+  findActivityByCode,
+  joinActivity,
+  listActivities,
+  loadActivity,
+  type ActivitySetupValues,
+} from "@/lib/services/start-work-activities";
+import type { Answer, Assessment, StartWorkActivity } from "@/lib/types";
 
+const auditor: Principal = { id: "usr-aud-kemi", role: "AUDITOR", status: "ACTIVE" };
+const otherAuditor: Principal = { id: "usr-aud-musa", role: "AUDITOR", status: "ACTIVE" };
+const admin: Principal = { id: "usr-admin", role: "ADMIN", status: "ACTIVE" };
+const supervisor: Principal = { id: "usr-sup-tunde", role: "SUPERVISOR", status: "ACTIVE" };
 const crew: Principal = { id: "usr-wkr-ibrahim", role: "WORKER", status: "ACTIVE" };
+const mate: Principal = { id: "usr-wkr-esther", role: "WORKER", status: "ACTIVE" };
+const third: Principal = { id: "usr-wkr-bassey", role: "WORKER", status: "ACTIVE" };
 
 // Hot Work on a PSV: q-hot-work-01..08 (5 core questions + 3 specific; 06 gas testing needs evidence).
-const setup = (overrides: Partial<AssessmentSetupValues> = {}): AssessmentSetupValues => ({
-  kind: "START_WORK",
+const setup = (overrides: Partial<ActivitySetupValues> = {}): ActivitySetupValues => ({
   moduleId: "mod-hot-work",
   vesselId: "ves-lady-perpetual",
-  locationId: "loc-bonny",
-  auditTypeId: "at-start-work-check",
+  locationId: "loc-marconi",
   taskDescription: "  Weld new bracket on the aft deck  ",
-  teamSize: 4,
+  teamSize: 2,
   ...overrides,
 });
 
-async function answerAll(assessment: Assessment, answers: Partial<Record<number, Answer>>) {
-  const form = await loadAssessmentForm(crew, assessment.id);
+async function openActivity(overrides: Partial<ActivitySetupValues> = {}): Promise<StartWorkActivity> {
+  return createActivity(auditor, setup(overrides));
+}
+
+async function answerAll(actor: Principal, assessment: Assessment, answers: Partial<Record<number, Answer>>) {
+  const form = await loadAssessmentForm(actor, assessment.id);
   const questions = form.sections.flatMap((s) => s.questions);
   for (const [index, question] of questions.entries()) {
-    await saveAnswer(crew, {
+    await saveAnswer(actor, {
       assessmentId: assessment.id,
       questionId: question.id,
       answer: answers[index + 1] ?? "YES",
@@ -51,31 +69,128 @@ beforeEach(async () => {
   await repo.demo.reset();
 });
 
-describe("Start Work Check setup", () => {
-  it("stores the task description (trimmed) and team size", async () => {
-    const check = await startAssessment(crew, setup());
-    expect(check.startWork).toEqual({ taskDescription: "Weld new bracket on the aft deck", teamSize: 4 });
-    expect(check.auditTypeId).toBe("at-start-work-check");
+describe("join codes", () => {
+  it("normalises typed codes and formats them for reading out", () => {
+    expect(normalizeJoinCode(" k7p-4qx ")).toBe("K7P4QX");
+    expect(formatJoinCode("K7P4QX")).toBe("K7P-4QX");
+    expect(JOIN_CODE_ALPHABET).not.toMatch(/[01OIL]/);
+  });
+});
+
+describe("setting up a Start Work Check", () => {
+  it("is for auditors and admins, with a reference, a join code and the job details", async () => {
+    const activity = await openActivity();
+    expect(activity).toMatchObject({
+      reference: expect.stringMatching(/^VAH-S-\d{4}-0001$/),
+      code: expect.stringMatching(/^[A-Z2-9]{6}$/),
+      status: "OPEN",
+      taskDescription: "Weld new bracket on the aft deck",
+      teamSize: 2,
+      createdById: auditor.id,
+      snapshot: { vesselName: "Lady Perpetual", createdByName: "Kemi Olatunji" },
+    });
+    expect(await createActivity(admin, setup())).toMatchObject({ reference: expect.stringMatching(/-0002$/) });
+    for (const actor of [crew, supervisor]) {
+      await expect(createActivity(actor, setup())).rejects.toMatchObject({ code: "FORBIDDEN" });
+    }
   });
 
-  it("requires a task description and a team size of 1–99", async () => {
+  it("requires a Start Work task, a job description and 1–99 people", async () => {
     const fieldError = (field: string) => ({ name: "ValidationError", fieldErrors: { [field]: expect.any(String) } });
-    await expect(startAssessment(crew, setup({ taskDescription: " " }))).rejects.toMatchObject(fieldError("taskDescription"));
-    await expect(startAssessment(crew, setup({ taskDescription: "x".repeat(201) }))).rejects.toMatchObject(
-      fieldError("taskDescription"),
-    );
-    await expect(startAssessment(crew, setup({ teamSize: undefined }))).rejects.toMatchObject(fieldError("teamSize"));
-    await expect(startAssessment(crew, setup({ teamSize: 0 }))).rejects.toMatchObject(fieldError("teamSize"));
-    await expect(startAssessment(crew, setup({ teamSize: 2.5 }))).rejects.toMatchObject(fieldError("teamSize"));
-    await expect(startAssessment(crew, setup({ teamSize: 100 }))).rejects.toMatchObject(fieldError("teamSize"));
+    await expect(openActivity({ taskDescription: " " })).rejects.toMatchObject(fieldError("taskDescription"));
+    await expect(openActivity({ taskDescription: "x".repeat(201) })).rejects.toMatchObject(fieldError("taskDescription"));
+    for (const teamSize of [0, 2.5, 100, Number.NaN]) {
+      await expect(openActivity({ teamSize })).rejects.toMatchObject(fieldError("teamSize"));
+    }
+    await expect(openActivity({ moduleId: "mod-security" })).rejects.toMatchObject(fieldError("moduleId"));
   });
 
-  it("ignores the Start Work fields for other assessments", async () => {
-    const moduleCheck = await startAssessment(
-      crew,
-      setup({ kind: "MODULE", moduleId: "mod-security", auditTypeId: "at-self-assessment", taskDescription: "", teamSize: undefined }),
-    );
-    expect(moduleCheck.startWork).toBeNull();
+  it("no longer lets anyone start a Start Work Check on their own", async () => {
+    await expect(
+      startAssessment(crew, {
+        kind: "START_WORK" as "MODULE",
+        moduleId: "mod-hot-work",
+        vesselId: "ves-lady-perpetual",
+        locationId: "loc-marconi",
+        auditTypeId: "at-start-work-check",
+      }),
+    ).rejects.toMatchObject({ name: "ValidationError" });
+  });
+});
+
+describe("joining", () => {
+  it("finds a check by code, gives each person their own check with the auditor's details", async () => {
+    const activity = await openActivity();
+    expect((await findActivityByCode(crew, formatJoinCode(activity.code).toLowerCase())).id).toBe(activity.id);
+    await expect(findActivityByCode(crew, "ABC")).rejects.toMatchObject({ fieldErrors: { code: expect.any(String) } });
+    await expect(findActivityByCode(crew, "ZZZZZZ")).rejects.toMatchObject({ fieldErrors: { code: expect.any(String) } });
+
+    const check = await joinActivity(crew, activity.id);
+    expect(check).toMatchObject({
+      kind: "START_WORK",
+      status: "DRAFT",
+      userId: crew.id,
+      moduleIds: ["mod-hot-work"],
+      vesselId: "ves-lady-perpetual",
+      locationId: "loc-marconi",
+      auditTypeId: "at-start-work-check",
+      activityId: activity.id,
+      startWork: { taskDescription: "Weld new bracket on the aft deck", teamSize: 2 },
+    });
+    // Joining again returns the same check.
+    expect((await joinActivity(crew, activity.id)).id).toBe(check.id);
+    // The auditor who set it up verifies it rather than answering it.
+    await expect(joinActivity(auditor, activity.id)).rejects.toMatchObject({ code: "CONFLICT" });
+    expect(await joinActivity(admin, activity.id)).toMatchObject({ userId: admin.id });
+  });
+
+  it("stops at the number of people the auditor set; a deleted draft frees the place", async () => {
+    const activity = await openActivity({ teamSize: 2 });
+    const first = await joinActivity(crew, activity.id);
+    await joinActivity(mate, activity.id);
+    await expect(joinActivity(third, activity.id)).rejects.toMatchObject({ code: "CONFLICT" });
+
+    const [summary] = await listActivities(third, { status: "OPEN" });
+    expect(summary).toMatchObject({ joined: 2, submitted: 0, mine: null, joinBlock: expect.stringContaining("All 2 places") });
+
+    await deleteMyDraft(crew, first.id);
+    expect(await joinActivity(third, activity.id)).toMatchObject({ userId: third.id });
+  });
+});
+
+describe("closing", () => {
+  it("is for the auditor who set it up (or an admin), records who and when, and stops joining and submitting", async () => {
+    const activity = await openActivity({ teamSize: 3 });
+    const done = await joinActivity(crew, activity.id);
+    await answerAll(crew, done, {});
+    await submitAssessment(crew, done.id);
+    const late = await joinActivity(mate, activity.id);
+    await answerAll(mate, late, {});
+
+    await expect(closeActivity(otherAuditor, activity.id)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(closeActivity(crew, activity.id)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    const closed = await closeActivity(auditor, activity.id, "  Cleared to start  ");
+    expect(closed).toMatchObject({ status: "CLOSED", closedById: auditor.id, closureComment: "Cleared to start" });
+    expect(closed.closedAt).not.toBeNull();
+
+    await expect(submitAssessment(mate, late.id)).rejects.toMatchObject({ code: "CONFLICT" });
+    await expect(joinActivity(third, activity.id)).rejects.toMatchObject({ code: "CONFLICT" });
+    await expect(findActivityByCode(third, activity.code)).rejects.toMatchObject({ name: "ValidationError" });
+    await expect(closeActivity(admin, activity.id)).rejects.toMatchObject({ code: "CONFLICT" });
+
+    const detail = await loadActivity(auditor, activity.id);
+    expect(detail).toMatchObject({ joined: 2, submitted: 1, canClose: false, closedByName: "Kemi Olatunji" });
+    expect(detail.participants.map((p) => [p.assessment.userId, p.assessment.status, p.canOpen])).toEqual([
+      [crew.id, "SUBMITTED", true],
+      [mate.id, "DRAFT", false],
+    ]);
+  });
+
+  it("lets an admin close any check", async () => {
+    const activity = await openActivity();
+    expect((await loadActivity(admin, activity.id)).canClose).toBe(true);
+    expect((await loadActivity(otherAuditor, activity.id)).canClose).toBe(false);
+    expect(await closeActivity(admin, activity.id)).toMatchObject({ status: "CLOSED", closedById: admin.id });
   });
 });
 
@@ -88,25 +203,37 @@ describe("Start Work Check answers", () => {
   });
 
   it("rejects a Concern answer even if the screen is bypassed", async () => {
-    const check = await startAssessment(crew, setup());
+    const check = await joinActivity(crew, (await openActivity()).id);
     await expect(
       saveAnswer(crew, { assessmentId: check.id, questionId: "q-hot-work-01", answer: "CONCERN", comment: "", observationTag: null }),
     ).rejects.toMatchObject({ name: "ValidationError" });
   });
 
-  it("lists the No items (Non-Compliant) that stop the job", async () => {
-    const check = await startAssessment(crew, setup());
-    await answerAll(check, { 2: "NO", 3: "NA", 8: "NO" });
+  it("lists the No items (Non-Compliant) that stop the job, and counts them on the activity", async () => {
+    const activity = await openActivity();
+    const check = await joinActivity(crew, activity.id);
+    await answerAll(crew, check, { 2: "NO", 3: "NA", 4: "NO" });
     const form = await loadAssessmentForm(crew, check.id);
-    expect(stopWorkItems(form.sections, form.responses).map((q) => q.id)).toEqual(["q-hot-work-02", "q-hot-work-08"]);
+    expect(stopWorkItems(form.sections, form.responses).map((q) => q.id)).toEqual(["q-hot-work-02", "q-hot-work-04"]);
+
+    for (const questionId of ["q-hot-work-02", "q-hot-work-04"]) {
+      await addFindingDraft(crew, check.id, questionId, {
+        description: "Not in place",
+        risk: "HIGH",
+        ownerId: crew.id,
+        targetDate: defaultTargetDate("HIGH"),
+      });
+    }
+    await submitAssessment(crew, check.id);
+    expect((await loadActivity(auditor, activity.id)).participants[0].noCount).toBe(2);
   });
 });
 
 describe("submitting a Start Work Check", () => {
   it("is scored like any module and stored as a normal Start Work Check assessment", async () => {
-    const check = await startAssessment(crew, setup());
+    const check = await joinActivity(crew, (await openActivity({ teamSize: 4 })).id);
     // Weights: core 01 w1, 02 w2, 03 w1, 04 w2, 05 w2, 06 w2, 07 w2, 08 w2 = 14; NO on 08 (w2) → 12/14 = 86%
-    await answerAll(check, { 8: "NO" });
+    await answerAll(crew, check, { 8: "NO" });
     // q-hot-work-08 is a critical control: a High-risk finding is required.
     await addFindingDraft(crew, check.id, "q-hot-work-08", {
       description: "No hot work permit",

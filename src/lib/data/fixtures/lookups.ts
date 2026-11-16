@@ -4,13 +4,17 @@ import type { AuditType, LookupItem } from "@/lib/types";
 
 const item = (id: string, name: string): LookupItem => ({ id, name, active: true });
 
-/** Vessel locations are demo values; the register does not give real ones (CLAUDE.md §15). */
+/** Vessel locations (owner's list, 2026-11-16). "Other" can be picked but no vessel starts there. */
 export const LOCATIONS = [
   item("loc-bonga", "Bonga"),
-  item("loc-ea", "EA"),
-  item("loc-forcados", "Forcados"),
-  item("loc-bonny", "Bonny"),
+  item("loc-onne", "Onne"),
+  item("loc-aveon", "Aveon"),
+  item("loc-marconi", "Marconi"),
+  item("loc-other", "Other"),
 ];
+
+/** The named locations vessels are assigned to (everything except "Other"). */
+export const NAMED_LOCATION_IDS = ["loc-bonga", "loc-onne", "loc-aveon", "loc-marconi"];
 
 export const PACKAGES = [
   item("pkg-epc1", "EPC1"),
@@ -40,13 +44,16 @@ export const RISK_CATEGORIES = [
   item("rc-environment", "Environment"),
 ];
 
-const ALL_ROLES: AuditType["allowedRoles"] = ["WORKER", "SUPERVISOR", "ADMIN"];
-const SUPERVISORY: AuditType["allowedRoles"] = ["SUPERVISOR", "ADMIN"];
+const EVERYONE: AuditType["allowedRoles"] = ["WORKER", "SUPERVISOR", "AUDITOR", "VISITOR", "ADMIN"];
+/** Workers' LOD 1 checks (owner decision, 2026-11-16). */
+const WORKER_TYPES: AuditType["allowedRoles"] = ["WORKER", "ADMIN"];
+/** Supervisors, auditors and visitors use Self Assessment and MFE only (owner decision, 2026-11-16). */
+const LEADER_TYPES: AuditType["allowedRoles"] = ["SUPERVISOR", "AUDITOR", "VISITOR", "ADMIN"];
 
 export const AUDIT_TYPES: AuditType[] = [
-  { id: "at-self-assessment", code: "SELF_ASSESSMENT", name: "Self Assessment", assuranceLevel: "SELF", allowedRoles: ALL_ROLES, displayOrder: 1, active: true },
-  { id: "at-start-work-check", code: "START_WORK_CHECK", name: "Start Work Check", assuranceLevel: "SELF", allowedRoles: ALL_ROLES, displayOrder: 2, active: true },
-  { id: "at-mfe", code: "MFE", name: "MFE", assuranceLevel: "SUPERVISORY", allowedRoles: SUPERVISORY, displayOrder: 3, active: true },
-  { id: "at-spot-check", code: "SPOT_CHECK", name: "Spot Check", assuranceLevel: "SUPERVISORY", allowedRoles: SUPERVISORY, displayOrder: 4, active: true },
-  { id: "at-verification", code: "VERIFICATION", name: "Verification", assuranceLevel: "SUPERVISORY", allowedRoles: SUPERVISORY, displayOrder: 5, active: true },
+  { id: "at-pre-mob", code: "PRE_MOB", name: "Pre-Mob", assuranceLevel: "SELF", allowedRoles: WORKER_TYPES, displayOrder: 1, active: true },
+  { id: "at-lod1", code: "LOD1", name: "LOD 1", assuranceLevel: "SELF", allowedRoles: WORKER_TYPES, displayOrder: 2, active: true },
+  { id: "at-self-assessment", code: "SELF_ASSESSMENT", name: "Self Assessment", assuranceLevel: "SELF", allowedRoles: LEADER_TYPES, displayOrder: 3, active: true },
+  { id: "at-mfe", code: "MFE", name: "MFE", assuranceLevel: "SUPERVISORY", allowedRoles: LEADER_TYPES, displayOrder: 4, active: true },
+  { id: "at-start-work-check", code: "START_WORK_CHECK", name: "Start Work Check", assuranceLevel: "SELF", allowedRoles: EVERYONE, displayOrder: 5, active: true },
 ];

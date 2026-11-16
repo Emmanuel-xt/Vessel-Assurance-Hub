@@ -4,6 +4,7 @@ export const REFERENCE_PREFIX = {
   assessment: "VAH-A",
   finding: "VAH-F",
   positiveIntervention: "VAH-P",
+  startWorkActivity: "VAH-S",
 } as const;
 
 export type ReferenceKind = keyof typeof REFERENCE_PREFIX;

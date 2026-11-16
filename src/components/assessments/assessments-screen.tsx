@@ -45,7 +45,7 @@ const FILTER_KEYS = [
 ] as const;
 type FilterKey = (typeof FILTER_KEYS)[number];
 
-/** /assessments: "My assessments" for everyone, "All assessments" (?view=all) for supervisors and admins. */
+/** /assessments: "My assessments" for everyone, "All assessments" (?view=all) for supervisors, auditors and admins. */
 export function AssessmentsScreen() {
   const user = useCurrentUser();
   const params = useSearchParams();
@@ -114,7 +114,7 @@ function MyAssessments() {
               </Link>
             }
           >
-            Pick a module, Full Vessel Assurance or a Start Work Check. Drafts and submitted assessments appear here.
+            Pick a LOD 1 Self Assessment module or a Start Work Check. Drafts and submitted assessments appear here.
           </EmptyState>
         ) : (
           <div className="space-y-6">
@@ -245,8 +245,8 @@ function AllAssessments() {
             {select("module", "Module", options.data.modules)}
             {select("auditType", "Audit type", options.data.auditTypes)}
             {select("scope", "Self / Supervisory", [
-              { id: "self", name: "Self (Self Assessment, Start Work Check)" },
-              { id: "supervisory", name: "Supervisory (MFE, Spot Check, Verification)" },
+              { id: "self", name: "Self (Pre-Mob, LOD 1, Self Assessment, Start Work Check)" },
+              { id: "supervisory", name: "Supervisory (MFE)" },
             ])}
             {select("contractor", "Contractor", options.data.companies.map((c) => ({ id: c, name: c })))}
             {select(

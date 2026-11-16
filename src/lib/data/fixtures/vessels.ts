@@ -3,7 +3,7 @@
 // "random", but identical after every reset.
 
 import type { Vessel } from "@/lib/types";
-import { LOCATIONS } from "./lookups";
+import { NAMED_LOCATION_IDS } from "./lookups";
 
 const REGISTER: [name: string, packageId: string, vesselTypeId: string][] = [
   ["FDS", "pkg-epc2", "vt-installation"],
@@ -70,22 +70,22 @@ const slug = (name: string) =>
 const random = seededRandom(20261105);
 
 /**
- * The demo history is concentrated on these 8 vessels (two per location), so the dashboard tells a clear story.
+ * The demo history is concentrated on these 8 vessels (two per named location), so the dashboard tells a clear story.
  * They get a fixed location; every other vessel keeps its seeded random one. The full register stays available.
  */
 export const FEATURED_VESSELS: Record<string, string> = {
   "Dark Knight II": "loc-bonga",
   "Normand Sentinel": "loc-bonga",
-  "Lady Perpetual": "loc-ea",
-  "Surfer 2624": "loc-ea",
-  "Topaz Master": "loc-forcados",
-  "Armed Responder XV": "loc-forcados",
-  "Blue Gretha": "loc-bonny",
-  "ACE Discoverer": "loc-bonny",
+  "Lady Perpetual": "loc-onne",
+  "Surfer 2624": "loc-onne",
+  "Topaz Master": "loc-aveon",
+  "Armed Responder XV": "loc-aveon",
+  "Blue Gretha": "loc-marconi",
+  "ACE Discoverer": "loc-marconi",
 };
 
 export const VESSELS: Vessel[] = REGISTER.map(([name, packageId, vesselTypeId]) => {
-  const randomLocation = LOCATIONS[Math.floor(random() * LOCATIONS.length)].id; // always drawn, keeps the sequence
+  const randomLocation = NAMED_LOCATION_IDS[Math.floor(random() * NAMED_LOCATION_IDS.length)]; // always drawn, keeps the sequence
   return {
     id: `ves-${slug(name)}`,
     name,

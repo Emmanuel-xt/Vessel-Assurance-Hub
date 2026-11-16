@@ -13,6 +13,13 @@ const nextConfig: NextConfig = {
       { source: "/admin/dashboard", destination: "/dashboard", permanent: false },
       // Moved to /assessments (Stage 11).
       { source: "/my/assessments", destination: "/assessments", permanent: false },
+      // Start Work Checks are joined from an auditor's check (Roles pass, 2026-11-16).
+      {
+        source: "/assess/new",
+        has: [{ type: "query", key: "module", value: "start-work" }],
+        destination: "/start-work",
+        permanent: false,
+      },
     ];
   },
 };

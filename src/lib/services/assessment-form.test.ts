@@ -28,8 +28,8 @@ async function securityDraft(): Promise<Assessment> {
     kind: "MODULE",
     moduleId: "mod-security",
     vesselId: "ves-lady-perpetual",
-    locationId: "loc-bonny",
-    auditTypeId: "at-self-assessment",
+    locationId: "loc-marconi",
+    auditTypeId: "at-lod1",
   });
 }
 
@@ -90,7 +90,7 @@ describe("loading the form", () => {
       auditTypeId: "at-mfe",
     });
     const form = await loadAssessmentForm(admin, draft.id);
-    expect(form.sections).toHaveLength(12);
+    expect(form.sections).toHaveLength(10);
     expect(form.sections.find((s) => s.module.id === "mod-navigation-watch")?.questions).toHaveLength(0);
   });
 });

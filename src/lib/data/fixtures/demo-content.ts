@@ -49,7 +49,7 @@ export const MODULE_CONTENT: Record<string, ModuleContent> = {
   "mod-navigation-watch": {
     no: [
       "AIS not transmitting; vessel not visible on the installation's screen.",
-      "No passage plan for the Forcados run - only a chart track.",
+      "No passage plan for the Onne run - only a chart track.",
       "Watch handover done verbally, nothing written in the log.",
     ],
     concern: [
@@ -58,16 +58,6 @@ export const MODULE_CONTENT: Record<string, ModuleContent> = {
     ],
     good: ["OOW called the installation early when visibility dropped - textbook.", "Passage plan briefed to the whole watch with tidal windows marked."],
     photos: ["Passage plan", "ECDIS screen", "Weather printout"],
-  },
-  "mod-personnel-transfer": {
-    no: [
-      "Two passengers on the basket without lifejackets.",
-      "Swell over 2.5 m - above the limit in the transfer procedure, transfer went ahead.",
-      "No passenger brief before the crew boat transfer.",
-    ],
-    concern: ["Gangway approved, but the motion log was not checked before use.", "Brief done, but in English only; two visitors unsure."],
-    good: ["Crew boat coxswain refused transfer at 2.4 m swell and waited for the window.", "Clear passenger brief with a head count at both ends."],
-    photos: ["Personnel basket", "Lifejacket rack", "Transfer log"],
   },
   "mod-cargo-operations": {
     no: [
@@ -78,16 +68,6 @@ export const MODULE_CONTENT: Record<string, ModuleContent> = {
     concern: ["Safe havens known, but the starboard one was blocked by drums.", "Container certificates on file, one tag hard to read."],
     good: ["Deck crew colour-coded tag lines and safe havens - very clear.", "Cargo manifest checked item by item with the crane operator."],
     photos: ["Cargo basket tag", "Deck cargo lashings", "Deck plan"],
-  },
-  "mod-bunkering": {
-    no: [
-      "Bunker hose test certificate expired in August.",
-      "Scuppers on the port side not plugged during transfer.",
-      "Bunkering checklist not completed with the receiving unit.",
-    ],
-    concern: ["Spill kit on deck, but missing absorbent pads.", "Hose inspected, coupling seal worn - monitor."],
-    good: ["Bunkering checklist read aloud on the radio with the rig - excellent.", "Drip trays in place under every coupling, all scuppers plugged."],
-    photos: ["Bunker hose coupling", "Spill kit", "Scupper plug"],
   },
   "mod-security": {
     no: [
@@ -242,4 +222,13 @@ export const GENERAL_FINDINGS = [
   "Housekeeping on the aft deck needs attention: loose ropes and drums near the walkway.",
   "Several crew unsure where the latest bridging document is kept.",
   "Notice boards out of date: last month's learning still posted.",
+];
+
+/** How auditors close a Start Work Check once the job is cleared. */
+export const ACTIVITY_CLOSURES = [
+  "All checks in, toolbox talk done. Cleared to start.",
+  "Team briefed at the worksite; permit signed. Job started.",
+  "Checks reviewed with the supervisor; one No resolved before work began.",
+  "Everyone signed on. Area barriered, standby man in place.",
+  "Job complete and area handed back. Closing the check.",
 ];

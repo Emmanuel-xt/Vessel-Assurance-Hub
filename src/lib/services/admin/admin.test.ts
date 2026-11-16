@@ -109,7 +109,7 @@ describe("vessels", () => {
     name: "MV Example",
     vesselTypeName: "PSV",
     packageId: "pkg-epc1",
-    defaultLocationId: "loc-bonny",
+    defaultLocationId: "loc-marconi",
     contractor: "",
     status: "ACTIVE",
   };
@@ -163,7 +163,20 @@ describe("modules", () => {
       category: "START_WORK",
       active: true,
     });
-    expect(created.displayOrder).toBe(18);
+    expect(created.displayOrder).toBe(16);
+  });
+
+  it("stores who sees an Assurance module, and clears it for Start Work modules", async () => {
+    const lod1 = await saveModule(admin, null, {
+      name: "Mooring Operations",
+      description: "",
+      category: "ASSURANCE",
+      roles: ["WORKER", "AUDITOR", "WORKER"],
+      active: true,
+    });
+    expect(lod1.roles).toEqual(["WORKER", "AUDITOR"]);
+    const task = await saveModule(admin, lod1.id, { ...lod1, category: "START_WORK", roles: ["WORKER"] });
+    expect(task.roles).toEqual([]);
   });
 
   it("reorders modules", async () => {

@@ -72,7 +72,7 @@ export async function listMyAssessmentRows(actor: Principal): Promise<{ drafts: 
   };
 }
 
-// ---------- All assessments (supervisors and admins) ----------
+// ---------- All assessments (supervisors, auditors and admins) ----------
 
 export interface AllAssessmentsFilter {
   vesselId?: ID;
@@ -82,7 +82,7 @@ export interface AllAssessmentsFilter {
   packageId?: ID;
   /** Submitter's company (contractor). */
   company?: string;
-  /** Self = Self Assessment / Start Work Check; Supervisory = MFE / Spot Check / Verification (audit type's level). */
+  /** Self = Pre-Mob / LOD 1 / Self Assessment / Start Work Check; Supervisory = MFE (audit type's level). */
   scope?: "self" | "supervisory";
   /** Only assessments that answered No to this question (dashboard drill-down). */
   questionId?: ID;
@@ -110,7 +110,7 @@ export function lagosDayEnd(date: ISODate): ISODateTime {
 export async function listAllAssessmentRows(actor: Principal, filter: AllAssessmentsFilter = {}): Promise<AssessmentRow[]> {
   const user = requireUser(actor);
   if (!canViewAllAssessments(user)) {
-    throw new PermissionError("FORBIDDEN", "Only supervisors and admins can see all assessments.");
+    throw new PermissionError("FORBIDDEN", "Only supervisors, auditors and admins can see all assessments.");
   }
   for (const key of ["from", "to"] as const) {
     if (filter[key] && !ISO_DATE.test(filter[key]!)) {
@@ -165,7 +165,7 @@ export interface FilterOptions {
 /** Choices for the All assessments filters, by name. Inactive items are kept so history can still be filtered. */
 export async function loadFilterOptions(actor: Principal): Promise<FilterOptions> {
   const user = requireUser(actor);
-  if (!canViewAllAssessments(user)) throw new PermissionError("FORBIDDEN", "Only supervisors and admins can filter all assessments.");
+  if (!canViewAllAssessments(user)) throw new PermissionError("FORBIDDEN", "Only supervisors, auditors and admins can filter all assessments.");
   const [vesselList, locationList, moduleList, auditTypeList, packageList, userList] = await Promise.all([
     vessels.list(),
     locations.list(),

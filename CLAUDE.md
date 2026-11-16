@@ -12,7 +12,7 @@
 ## 1. Purpose
 
 A standalone, open-web **LOD1 (Line of Defence 1) assurance app** for offshore vessel operations in Nigeria
-(locations such as Bonga, EA, Forcados, Bonny). Delivered as a web app / installable PWA, reachable by
+(locations: Bonga, Onne, Aveon, Marconi, Other). Delivered as a web app / installable PWA, reachable by
 browser, mobile and QR code.
 
 - **Owner:** Vessel SIMOPS Manager.
@@ -32,12 +32,14 @@ browser, mobile and QR code.
 
 | Role | Typical positions | Can do |
 |---|---|---|
-| **WORKER** | Crew Member, Bridge Officer, Galley Team, Chief Engineer, Master | Self Assessments, Start Work Checks; own submission history; findings/actions assigned to them |
-| **SUPERVISOR** | Team Lead, Marine Representative, Offshore Coordinator, Manager/MFE Visitor | Everything a Worker can do, plus supervisory audit types (MFE, Spot Check, Verification); read-only fleet-wide dashboard |
-| **ADMIN** | Assurance owner / delegates | Approve users, change roles, disable accounts; manage vessels, packages, locations, modules, question bank, audit types, vessel types, risk categories; full dashboard; reset demo data |
+| **WORKER** | Crew Member, Bridge Officer, Galley Team, Chief Engineer, Master | LOD 1 checks with **Pre-Mob / LOD 1** on the 7 crew modules; Start Work Checks; own submission history; findings/actions assigned to them |
+| **SUPERVISOR** | Team Lead, Marine Representative, Offshore Coordinator | **Self Assessment / MFE** on the 3 leadership modules only; Start Work Checks; read-only fleet-wide dashboard and All assessments |
+| **AUDITOR** | Marine Representative, Offshore Coordinator | **Self Assessment / MFE** on all 10 LOD 1 modules; **Full Vessel Assurance**; initiates and closes Start Work Checks (Part 2); read-only dashboard and All assessments |
+| **VISITOR** | Manager/MFE Visitor | **Self Assessment / MFE** on all 10 LOD 1 modules; Start Work Checks; no dashboard, no Full Vessel |
+| **ADMIN** | Assurance owner / delegates | Every module and audit type, Full Vessel; approve users, change roles, disable accounts; manage vessels, packages, locations, modules, question bank; full dashboard; reset demo data |
 
-- Everyone sees the **same hub** and can open **any module**.
-- **Role only controls which audit types a user can pick** (plus the admin-only areas above).
+- Everyone sees the **same hub**, but the **LOD 1 Self Assessment Module** list depends on the role (`Module.roles`,
+  admin-editable "Shown to"), and the audit types come from each audit type's `allowedRoles` (§15, Roles pass).
 - Position and role are independent: the position list comes from the doc's personas (plus "Other"),
   the role is requested at signup and confirmed by an admin.
 
@@ -74,28 +76,30 @@ browser, mobile and QR code.
 
 ## 6. Modules
 
-17 seeded modules from the design document (admin can add, edit, reorder, deactivate). Each module has a
-**category**: `Start Work` or `Assurance`.
+15 seeded modules from the design document (admin can add, edit, reorder, deactivate). Bunkering and Personnel
+Transfer were removed on 2026-11-16. Each module has a **category**: `Start Work` or `Assurance`, and Assurance
+modules have **Shown to** roles (empty = everyone; admins see all).
 
 | # | Module | Category |
 |---|---|---|
 | 1 | Marine Start Work | Start Work |
 | 2 | Bridge Team | Assurance |
 | 3 | Navigation Watch | Assurance |
-| 4 | Personnel Transfer | Assurance |
-| 5 | Cargo Operations | Assurance |
-| 6 | Bunkering | Assurance |
-| 7 | Security | Assurance |
-| 8 | Occupational Health | Assurance |
-| 9 | Galley | Assurance |
-| 10 | Working at Height | Start Work |
-| 11 | Confined Space Entry | Start Work |
-| 12 | Hot Work | Start Work |
-| 13 | Energy Isolation | Start Work |
-| 14 | Emergency Preparedness | Assurance |
-| 15 | Leadership Engagement | Assurance |
-| 16 | Contractor Management | Assurance |
-| 17 | Learning & Action Closure | Assurance |
+| 4 | Cargo Operations | Assurance |
+| 5 | Security | Assurance |
+| 6 | Occupational Health | Assurance |
+| 7 | Galley | Assurance |
+| 8 | Working at Height | Start Work |
+| 9 | Confined Space Entry | Start Work |
+| 10 | Hot Work | Start Work |
+| 11 | Energy Isolation | Start Work |
+| 12 | Emergency Preparedness | Assurance |
+| 13 | Leadership Engagement | Assurance (leadership) |
+| 14 | Contractor Management | Assurance (leadership) |
+| 15 | Learning & Action Closure | Assurance (leadership) |
+
+Crew modules (Bridge Team to Emergency Preparedness) are shown to Worker, Auditor, Visitor; leadership modules to
+Supervisor, Auditor, Visitor.
 
 The category split is an assumption (§15): task-based, Life-Saving-Rule style modules are *Start Work*.
 
@@ -232,7 +236,7 @@ Everything marked `// MOCK` in code. Keep this list in sync.
 - [ ] `src/lib/data/mock/*`: in-memory + `localStorage` store → real database / API
 - [ ] Simulated network delay → remove
 - [ ] Mock auth (`src/lib/data/mock/auth.ts`): plain-text password check, session = user id in `localStorage`
-      (`vah-demo-v2-session`) → real auth provider, hashed passwords, httpOnly server-side sessions
+      (`vah-demo-v4-session`) → real auth provider, hashed passwords, httpOnly server-side sessions
 - [ ] Client-side route guards (`src/components/auth/guards.tsx`) → keep for UX, but enforce auth/roles on the server
       (middleware + API checks with `src/lib/services/permissions.ts`)
 - [ ] `demo.logInAs` / `demoLogInAs` (passwordless sign-in) → remove
@@ -273,6 +277,11 @@ Everything marked `// MOCK` in code. Keep this list in sync.
 - [ ] Submit + raising findings (`submitAssessment` → `raiseDraftFindings`) run as separate calls → one server
       transaction (today a failure part-way could leave a submitted assessment with only some findings)
 - [ ] Notification links point to `/findings/<id>`, which is not built yet (findings stage)
+- [ ] Start Work Check join codes are generated in the browser (`newJoinCode` in `mock/assessment-repositories.ts`)
+      and joining (place count + create) is two calls → server-side code generation and one transaction
+- [ ] `summarise` in `src/lib/services/start-work-activities.ts` loads every assessment to count participants →
+      COUNT … GROUP BY activity query
+- [ ] Start Work Check history (`startWorkActivities` in `fixtures/history.ts`, `ACTIVITY_CLOSURES`) → remove with the history
 
 ## 15. Key decisions
 
@@ -305,7 +314,7 @@ _Confirmed decisions, with date. Assumptions are Claude's defaults where the ans
 - Module categories as in §6; "Start Work Check" on the hub = choose a *Start Work* module.
 - Full Vessel Assurance = one assessment record with a section per *Assurance* module.
 - Evidence photo required only for `No` / `Concern Identified` on evidence-required questions.
-- Seeded audit types: Self Assessment and Start Work Check (Worker+); MFE, Spot Check, Verification (Supervisor+).
+- Seeded audit types: superseded by the Roles pass (2026-11-16): Pre-Mob, LOD 1, Self Assessment, MFE, Start Work Check.
   Admins can pick every audit type.
 - Risk categories (admin-editable) seeded as: Personal Safety, Process Safety, Marine Operations, Security,
   Health, Environment.
@@ -317,7 +326,7 @@ _Confirmed decisions, with date. Assumptions are Claude's defaults where the ans
 ### Confirmed 2026-11-05 (later)
 
 - **Claude writes the real module-specific questions** (doc's first-person style), on top of the doc's 5 core questions.
-- **Vessel locations are assigned at random** (Bonga, EA, Forcados, Bonny) in the fixtures, except the 8 featured
+- **Vessel locations are assigned at random** (Bonga, Onne, Aveon, Marconi; never "Other") in the fixtures, except the 8 featured
   demo vessels, which have fixed locations (2026-11-06, see Demo data set decisions).
 - **Scaffolding conventions:**
   - Next.js **15.5.29** (pinned). Scaffolded on 16.4.5, then **stepped down to 15.5 at the owner's request**
@@ -720,11 +729,84 @@ Owner: "Do the best for a demo" (on the plan: keep the 41-vessel register, conce
   2026-11-05 rule over the review brief's "owner only, admins excepted"). Who closed what, and when, is always
   recorded. Finding *drafts* stay editable only by the assessment's author while the assessment is a draft.
 
+### Roles pass decisions (2026-11-16)
+
+Owner request; plan approved. Part 1 built (below); Part 2 = Start Work Check activities, next.
+
+- **Locations:** Bonga, Onne, Aveon, Marconi, Other (`loc-bonga`, `loc-onne`, `loc-aveon`, `loc-marconi`, `loc-other`).
+  Featured vessels two each at the four named ones (Dark Knight II, Normand Sentinel = Bonga; Lady Perpetual,
+  Surfer 2624 = Onne; Topaz Master, Armed Responder XV = Aveon; Blue Gretha, ACE Discoverer = Marconi). Random
+  assignment and the history's "other location" never use "Other" (`NAMED_LOCATION_IDS`).
+- **Roles:** `WORKER | SUPERVISOR | AUDITOR | VISITOR | ADMIN`. All four non-admin roles can be requested at signup
+  (an admin still approves). `ROLE_LABELS` order = picker order.
+- **Audit types** (owner): Pre-Mob (`at-pre-mob`) and LOD 1 (`at-lod1`) for Workers; Self Assessment and MFE for
+  Supervisors, Auditors and Visitors; Admin all; Start Work Check unchanged (Start Work Checks only). Spot Check and
+  Verification removed. Levels: Pre-Mob, LOD 1, Self Assessment, Start Work Check = SELF; MFE = SUPERVISORY.
+- **LOD 1 Self Assessment Module** (hub heading, was "Assess one module"). `Module.roles` + `isModuleVisibleTo` /
+  `modulesVisibleTo` (`permissions.ts`): Workers see the 7 crew modules, Supervisors only Leadership Engagement,
+  Contractor Management, Learning & Action Closure; Auditors, Visitors and Admins all 10. Admin edits it as
+  "Shown to" chips on Assurance modules (`MODULE_AUDIENCE_ROLES`; Start Work modules always store `[]`).
+- **Full Vessel Assurance: Auditor and Admin only** (`canStartFullVessel`): hub tile hidden, setup page shows an alert,
+  `startAssessment` refuses (FORBIDDEN). `startAssessment` also refuses a module outside the role's LOD 1 list.
+- **Dashboard and All assessments:** Supervisor, Auditor, Admin (`DASHBOARD_ROLES`); Visitors none. Auditors see
+  submitted assessments like Supervisors (`canViewAssessment`).
+- **Bunkering and Personnel Transfer removed** (fixtures, questions, demo wording, icons); the owner will send the real
+  Start Work Check list and questions.
+- **Demo users: 27.** New auditors Kemi Olatunji (`usr-aud-kemi`, demo account) and Musa Garba (`usr-aud-musa`),
+  Project Marine Team; Segun Ogunleye is now the Visitor (`usr-vis-segun`, demo account). Quick-login and "Demo as":
+  Admin, Auditor, Supervisor, Visitor, Worker.
+- **History follows the new rules:** worker module checks use LOD 1 (70%) / Pre-Mob (30%) on crew modules; MFE by
+  supervisors, auditors, the visitor and the admin; leaders' self checks use Self Assessment; Full Vessel by auditors
+  (85%) and the admin. Tuning: improving vessel risk `5.4 - 5.1 * progress`; a non-critical No raises a finding 65%
+  of the time. The story test still holds (weak, improving, single gap vessel). Dashboard (this year): fleet 85%,
+  300 assessments.
+- **Storage key `vah-demo-v4`** (session `vah-demo-v4-session`; v3 was Part 1 only); older keys are deleted on first
+  load, so everyone is signed out once.
+
+#### Part 2: Start Work Check activities (2026-11-16)
+
+Owner: "workers don't enter any job description; they only take on a start work check created by the Auditor (code,
+drop-down of open checks, or other good ways)".
+
+- **`StartWorkActivity`** (`types.ts`, table `startWorkActivities`, repository `startWorkActivities` with
+  `findByCode`): reference **`VAH-S-YYYY-NNNN`**, 6-character **join code** (`src/lib/services/join-codes.ts`: no
+  0/O/1/I/L, shown as `K7P-4QX`, typed case- and dash-insensitive), task (Start Work module), vessel, location, job
+  description, team size, `createdById`, `OPEN | CLOSED`, closed by / at / comment, snapshot (vessel, package,
+  creator name). `Assessment.activityId` links each person's check to it.
+- **Rules** (`src/lib/services/start-work-activities.ts`): `createActivity` (Auditor or Admin, `canInitiateStartWork`);
+  `joinActivity` creates the person's own START_WORK draft with the activity's task, vessel, location, job and team
+  size (joining twice returns the same check; refused when closed, when **joined = team size**, or for the auditor
+  who set it up, who verifies rather than answers; a deleted draft frees the place); `findActivityByCode` (field
+  error on `code` for short, unknown or closed codes); `closeActivity` (the activity's Auditor or any Admin,
+  `canCloseActivity`; optional comment ≤ 500; records who/when); `listActivities`, `loadActivity`,
+  `countOpenActivities`. `submitAssessment` refuses a check whose activity is closed; unsubmitted drafts show
+  "Not submitted".
+- **`startAssessment` no longer starts Start Work Checks** (`assessmentSetupSchema.kind` = MODULE | FULL_VESSEL);
+  `/assess/new?module=start-work` redirects to `/start-work` (`next.config.ts`). The Job / People fields moved to the
+  Auditor's setup screen.
+- **Screens** (`src/components/start-work/`): `/start-work` = "Have a code?" box (goes to the check so the person
+  confirms the job before joining), **Open checks** list with a vessel filter and Join / Continue my check / View my
+  check, plus "New Start Work Check" and closed checks for auditors/admins; `/start-work/new` (Auditor/Admin;
+  task, job, people stepper, vessel, location); `/start-work/[id]` = details, Join button, **code + QR code + link**
+  (Copy link, Share on phones) while open, Team list ("2 of 3 joined · 1 submitted · 1 place left", All clear / STOP
+  badge + score per person, links to submitted checks), STOP alert, and **Close check** (comment + confirmation that
+  says how many have not submitted / answered No). The join link is a path, so it survives the login redirect.
+- **Hub tile:** Auditor/Admin "Start Work Check", everyone else "Join a Start Work Check", with an "N open" badge;
+  both go to `/start-work`. Review, confirmation and detail pages show "Part of Start Work Check VAH-S-… · set up by …".
+- **QR codes:** `qrcode@1.5.4` (+ `@types/qrcode@1.5.5`), loaded with `import("qrcode")` only on the activity page.
+- **Demo history:** every Start Work Check belongs to an activity set up by an auditor (90%) or the admin, 2–4 crew
+  members each submitting their own check minutes apart, closed with a comment; plus **2 checks open today**
+  (Dark Knight II Hot Work, 2 of 4 joined; Normand Sentinel Working at Height, 0 of 3) that Ibrahim (demo worker) can
+  join. Generator: 258 check events → ~298 assessments, 22 activities, ~71 findings, Topaz Master the only gap vessel.
+  History tests now check "about 300" instead of exactly 300.
+
 ## 16. Open questions
 
 _Move answers into §15 once resolved._
 
 1. Real risk category list (currently defaults).
+2. The owner's Start Work Check list and questions (to replace the 5 current Start Work modules' questions).
+3. Notifications for Start Work Checks (e.g. tell the auditor when someone answers No) - not built.
 
 ## 17. Progress
 
@@ -791,6 +873,17 @@ _Move answers into §15 once resolved._
 - [x] Pre-demo review (2026-11-06). Permissions, data-layer boundary, MOCK markers / §14, loading-empty-error states,
       console sweep of 45 page loads in headless Edge (Admin / Worker / Supervisor / signed out). Fixed 13 findings
       (see Pre-demo review decisions).
+- [x] Roles pass, Part 1 (2026-11-16). New locations, Auditor and Visitor roles, Pre-Mob / LOD 1 / Self Assessment /
+      MFE audit types, role-based LOD 1 module list ("Shown to"), Full Vessel for Auditor + Admin, Bunkering and
+      Personnel Transfer removed, history regenerated, storage key v3. Verified: 240 tests, `tsc`, lint, build;
+      headless Edge at 375 px as all 5 demo accounts (hub tiles, audit types, Full Vessel guard, dashboard access,
+      Admin > Modules, signup roles), no console errors.
+- [x] Roles pass, Part 2 (2026-11-16): Start Work Check activities. Auditor sets up (task, job, people, vessel,
+      location) → code / QR / link; crew join by code, open-checks list or link and each answer their own check;
+      team progress with STOP flags; Auditor closes. Verified: 246 tests, `tsc`, lint, build; headless Edge at 375 px
+      walkthrough (Auditor creates → worker joins by code, answers, submits → second worker joins → Auditor sees
+      2 of 3 / 1 submitted, closes → late worker blocked, closed code refused; supervisor blocked from setup; old link
+      redirects), no console errors.
 
 ## 18. Source document summary
 

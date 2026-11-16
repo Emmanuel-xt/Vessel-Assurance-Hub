@@ -1,6 +1,7 @@
 // MOCK: seed question bank, written in the design document's first-person style (CLAUDE.md §7).
-// - The document's 5 core questions open every task-based module (Start Work modules, Personnel Transfer,
-//   Cargo Operations, Bunkering), where "fit for duty / stop the job / proceed safely" makes sense.
+// - The document's 5 core questions open every task-based module (Start Work modules and Cargo Operations),
+//   where "fit for duty / stop the job / proceed safely" makes sense. (Personnel Transfer and Bunkering were
+//   removed on 2026-11-16.)
 // - The owner's question lists are placed in the matching document modules; the rest are drafted by Claude
 //   for the owner to review.
 // - Critical controls weigh 2; everything else weighs 1.
@@ -52,24 +53,11 @@ const BANK: Record<string, Q[]> = {
     { text: "I know the 500 m zone entry procedure for the installation.", risk: "rc-marine-ops", critical: true, vesselTypes: CREWED_VESSELS },
     { text: "I am satisfied the watch handover was complete and recorded.", risk: "rc-marine-ops", vesselTypes: CREWED_VESSELS },
   ],
-  "mod-personnel-transfer": [
-    ...CORE,
-    { text: "I have confirmed the transfer method (basket, gangway or crew boat) is approved for today's conditions.", risk: "rc-marine-ops", critical: true },
-    { text: "I have checked the weather and sea state are within transfer limits.", risk: "rc-marine-ops", critical: true },
-    { text: "I am satisfied everyone transferring has been briefed and is wearing a lifejacket.", risk: "rc-personal-safety" },
-  ],
   "mod-cargo-operations": [
     ...CORE,
     { text: "I have confirmed the lifting equipment and cargo units are certified and inspected.", risk: "rc-process-safety", critical: true, evidence: true },
     { text: "I know where the safe havens on deck are during lifting.", risk: "rc-personal-safety" },
     { text: "I am satisfied the deck cargo is secured and the deck plan is up to date.", risk: "rc-marine-ops" },
-  ],
-  "mod-bunkering": [
-    ...CORE,
-    { text: "I have completed the bunkering checklist with the other unit.", risk: "rc-environment", critical: true, evidence: true },
-    { text: "I have confirmed the hoses and couplings are inspected and in date.", risk: "rc-environment", evidence: true },
-    { text: "I know where the spill kit is and how to use it.", risk: "rc-environment" },
-    { text: "I am satisfied the scuppers are plugged and spill controls are in place.", risk: "rc-environment", critical: true },
   ],
   "mod-security": [
     { text: "I have checked access control to the vessel is working.", risk: "rc-security", critical: true },

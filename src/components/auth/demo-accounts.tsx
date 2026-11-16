@@ -3,7 +3,7 @@
 // MOCK: one-click demo logins for the showcase. Only rendered when NEXT_PUBLIC_DEMO_MODE=true.
 
 import { useState } from "react";
-import { HardHat, ShieldCheck, UserCog } from "lucide-react";
+import { ClipboardCheck, HardHat, ShieldCheck, UserCog, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DEMO_ACCOUNTS, DEMO_MODE } from "@/lib/config";
@@ -14,7 +14,9 @@ import { useAuth } from "./auth-provider";
 
 export const ROLE_ICONS: Record<Role, React.ElementType> = {
   ADMIN: ShieldCheck,
+  AUDITOR: ClipboardCheck,
   SUPERVISOR: UserCog,
+  VISITOR: UserRound,
   WORKER: HardHat,
 };
 
